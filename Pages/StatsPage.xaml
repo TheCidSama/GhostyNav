@@ -1,0 +1,152 @@
+<UserControl x:Class="GhostyNav.Pages.StatsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:GhostyNav.Controls">
+    <UserControl.Resources>
+        <Style x:Key="MiniChip" TargetType="Border">
+            <Setter Property="Background" Value="#1F1F23" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="Margin" Value="2,0" />
+        </Style>
+        <Style x:Key="GaugeTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,6,0,0" />
+        </Style>
+        <Style x:Key="GaugeSub" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="9.5" />
+            <Setter Property="Foreground" Value="{StaticResource SubTextBrush}" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="Margin" Value="0,1,0,6" />
+        </Style>
+        <Style x:Key="Small" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="9.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="12,2,12,0">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="8" />
+            <ColumnDefinition Width="186" />
+        </Grid.ColumnDefinitions>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="8" />
+                <RowDefinition Height="50" />
+            </Grid.RowDefinitions>
+
+            <UniformGrid Columns="3">
+                <Border Style="{StaticResource Card}" Margin="0,0,4,0" Padding="8,10">
+                    <StackPanel>
+                        <Grid Width="62" Height="62">
+                            <c:Ring x:Name="CpuRing" Thickness="6" Stroke="{StaticResource AccentBrush}" />
+                            <TextBlock x:Name="CpuText" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                        <TextBlock Text="CPU" Style="{StaticResource GaugeTitle}" />
+                        <TextBlock x:Name="CpuName" Style="{StaticResource GaugeSub}" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <Border Style="{StaticResource MiniChip}"><TextBlock x:Name="CpuGhz" Style="{StaticResource Small}" /></Border>
+                            <Border Style="{StaticResource MiniChip}"><TextBlock x:Name="ProcCount" Style="{StaticResource Small}" /></Border>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="4,0" Padding="8,10">
+                    <StackPanel>
+                        <Grid Width="62" Height="62">
+                            <c:Ring x:Name="GpuRing" Thickness="6" Stroke="{StaticResource GpuBrush}" />
+                            <TextBlock x:Name="GpuText" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                        <TextBlock Text="GPU" Style="{StaticResource GaugeTitle}" />
+                        <TextBlock x:Name="GpuName" Style="{StaticResource GaugeSub}" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <Border Style="{StaticResource MiniChip}"><TextBlock x:Name="GpuMem" Style="{StaticResource Small}" /></Border>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="4,0,0,0" Padding="8,10">
+                    <StackPanel>
+                        <Grid Width="62" Height="62">
+                            <c:Ring x:Name="RamRing" Thickness="6" Stroke="{StaticResource RamBrush}" />
+                            <TextBlock x:Name="RamText" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                        <TextBlock Text="RAM" Style="{StaticResource GaugeTitle}" />
+                        <TextBlock x:Name="RamUsed" Style="{StaticResource GaugeSub}" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <Border Style="{StaticResource MiniChip}"><TextBlock x:Name="RamFree" Style="{StaticResource Small}" /></Border>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+
+            <UniformGrid Grid.Row="2" Columns="3">
+                <Border Style="{StaticResource Card}" Margin="0,0,4,0" Padding="10,7">
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock x:Name="DiskLabel" Style="{StaticResource Label}" />
+                        <TextBlock x:Name="DiskText" FontSize="12.5" FontWeight="SemiBold" Margin="0,2,0,0" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="4,0" Padding="10,7">
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="NETWORK" Style="{StaticResource Label}" />
+                        <TextBlock x:Name="NetText" FontSize="12" FontWeight="SemiBold" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}" Margin="4,0,0,0" Padding="10,7">
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="UP FOR" Style="{StaticResource Label}" />
+                        <TextBlock x:Name="UptimeText" FontSize="12.5" FontWeight="SemiBold" Margin="0,2,0,0" />
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+        </Grid>
+
+        <Grid Grid.Column="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="8" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Border Style="{StaticResource Card}" Padding="10,8">
+                <DockPanel>
+                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4">
+                        <Button x:Name="TopToggle" DockPanel.Dock="Right" Style="{StaticResource FlatButton}" Height="18"
+                                Padding="6,0" Background="Transparent" Foreground="{StaticResource AccentBrush}" FontSize="9.5"
+                                Click="OnToggleTop" />
+                        <TextBlock x:Name="TopTitle" FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <StackPanel x:Name="TopList" />
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Row="2" Style="{StaticResource Card}" Padding="10,8">
+                <StackPanel>
+                    <DockPanel>
+                        <TextBlock x:Name="SpeedMeta" DockPanel.Dock="Right" Style="{StaticResource Label}" FontWeight="Normal"
+                                   FontSize="9" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="100" />
+                        <TextBlock Text="Internet speed" FontSize="10.5" FontWeight="SemiBold" />
+                    </DockPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,6">
+                        <TextBlock x:Name="DownText" FontSize="22" FontWeight="SemiBold" Text="—" />
+                        <TextBlock Text=" Mbps ↓" Style="{StaticResource Label}" FontWeight="Normal" VerticalAlignment="Bottom" Margin="0,0,10,4" />
+                        <TextBlock x:Name="UpText" FontSize="22" FontWeight="SemiBold" Text="—" />
+                        <TextBlock Text=" Mbps ↑" Style="{StaticResource Label}" FontWeight="Normal" VerticalAlignment="Bottom" Margin="0,0,0,4" />
+                    </StackPanel>
+                    <Button x:Name="SpeedButton" Style="{StaticResource PrimaryButton}" Height="26" Click="OnSpeedTest">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE768;" FontSize="9" Margin="0,0,6,0" />
+                            <TextBlock x:Name="SpeedButtonText" Text="Run speed test" FontSize="11" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

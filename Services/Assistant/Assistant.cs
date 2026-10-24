@@ -1,0 +1,313 @@
+using System.Diagnostics;
+using System.Windows.Threading;
+using GhostyNav.Controls;
+
+namespace GhostyNav.Services.Assistant;
+
+/// <summary>What the voice assistant needs from the island window.</summary>
+public interface IAssistantView
+{
+    AssistantPanel Panel { get; }
+    void BeginAssistant();
+    void SetAssistantStatus(string text);
+    void SetAssistantLevel(double level);
+    /// <summary>Close the assistant after a while (not while the pointer is on its card).</summary>
+    void EndAssistant(TimeSpan after);
+    void DismissAssistant();
+    /// <summary>The ghost mouths along for this long while the reply is read aloud.</summary>
+    void SpeakingFor(TimeSpan duration);
+}
+
+/// <summary>
+/// Hold Ctrl+Alt and speak: the words are transcribed live, anything circled with the mouse is
+/// captured, and on release Gemini decides what to do. Circling something without saying anything
+/// sends nothing: the selection waits for the next hold, where the instructions come. Runs on the
+/// UI thread.
+/// </summary>
+public sealed class Assistant : IDisposable
+{
+    private static readonly TimeSpan MaxHold = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan PendingTimeout = TimeSpan.FromSeconds(60);
+
+    private readonly Dispatcher _ui;
+    private readonly IAssistantView _view;
+    private readonly AppSettings _settings;
+    private readonly RoutineScheduler _routines;
+    private readonly Speaker _speaker = new();
+    private readonly KeyChord _chord;
+    private readonly DispatcherTimer _holdWatch = new() { Interval = TimeSpan.FromMilliseconds(200) };
+    private readonly DispatcherTimer _pendingTimer = new() { Interval = PendingTimeout };
+    private Session? _session;
+    // Areas circled with nothing said yet: kept on screen until the next hold says what to do with them.
+    private TrailOverlay? _pending;
+
+    private sealed class Session
+    {
+        public required string Key;
+        public required TrailOverlay Overlay;
+        public required LiveTranscriber Transcriber;
+        public Task Connect = Task.CompletedTask;
+        public Microphone? Mic;
+        public readonly CancellationTokenSource Cts = new();
+        public readonly Stopwatch Clock = Stopwatch.StartNew();
+        public bool Listening;
+        /// <summary>The circled areas are waiting for instructions: leave the overlay up.</summary>
+        public bool KeepOverlay;
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            Cts.Cancel();
+            Mic?.Dispose();
+            if (!KeepOverlay) Overlay.FadeAndClose();
+            _ = Transcriber.DisposeAsync().AsTask();
+        }
+    }
+
+    public Assistant(Dispatcher ui, IAssistantView view, AppSettings settings, RoutineScheduler routines)
+    {
+        _ui = ui;
+        _view = view;
+        _settings = settings;
+        _routines = routines;
+        _chord = new KeyChord(ui);
+        _chord.Pressed += Begin;
+        _chord.Released += () => _ = FinishAsync();
+        _chord.Cancelled += () =>
+        {
+            Stop();
+            _view.DismissAssistant();
+        };
+        // A key-up can go missing (Ctrl+Alt+Del, a hung app); trust the physical key state too.
+        _holdWatch.Tick += (_, _) =>
+        {
+            if (_session is not { Listening: true } s) return;
+            if (KeyChord.IsHeld() && s.Clock.Elapsed < MaxHold) return;
+            _chord.Reset();
+            _ = FinishAsync();
+        };
+        // Nobody came back to say what to do with the circled areas: drop them, unsent.
+        _pendingTimer.Tick += (_, _) =>
+        {
+            Stop();
+            _view.DismissAssistant();
+        };
+    }
+
+    public bool IsListening => _session?.Listening == true;
+
+    private void Begin()
+    {
+        var carried = TakePending(); // areas circled last time, now getting their instructions
+        Stop();
+        _view.BeginAssistant();
+
+        string? key = GeminiKey.Load();
+        if (key == null)
+        {
+            carried?.FadeAndClose();
+            _view.SetAssistantStatus("No API key");
+            _view.Panel.ShowError("Add your Gemini API key",
+                "Click the notch, open Settings (the gear tab) and paste your key.");
+            _view.EndAssistant(TimeSpan.FromSeconds(8));
+            return;
+        }
+        _ = AppIndex.GetAsync(); // warm the app list while the user speaks
+
+        var session = new Session
+        {
+            Key = key, Overlay = carried ?? new TrailOverlay(_settings.AssistantHalo), Transcriber = new LiveTranscriber()
+        };
+        session.Overlay.Circled += () =>
+        {
+            if (_session == session) _view.Panel.SetCircled(session.Overlay.Captures.Count);
+        };
+        if (carried == null) session.Overlay.Show();
+        session.Overlay.StartTracking();
+        _view.Panel.SetCircled(session.Overlay.Captures.Count);
+
+        session.Transcriber.TranscriptChanged += (final, interim) => _ui.BeginInvoke(() =>
+        {
+            if (_session == session && session.Listening) _view.Panel.SetTranscript(final, interim);
+        });
+        session.Connect = session.Transcriber.StartAsync(key);
+        // Observed here so an early failure (offline) never goes unobserved; reported on release.
+        session.Connect.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+
+        session.Mic = new Microphone();
+        session.Mic.Chunk += (pcm, level) =>
+        {
+            session.Transcriber.SendAudio(pcm);
+            _ui.BeginInvoke(() =>
+            {
+                if (_session != session || !session.Listening) return;
+                _view.SetAssistantLevel(level);
+                session.Overlay.SetLevel(level);
+            });
+        };
+        _session = session;
+        try
+        {
+            session.Mic.Start();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Debug.WriteLine(ex.Message);
+            Stop();
+            _view.SetAssistantStatus("No microphone");
+            _view.Panel.ShowError("Couldn't use the microphone",
+                "Check Settings › Privacy & security › Microphone › Let desktop apps access your microphone.");
+            _view.EndAssistant(TimeSpan.FromSeconds(7));
+            return;
+        }
+        session.Listening = true;
+        _view.SetAssistantStatus("Listening");
+        _holdWatch.Start();
+    }
+
+    private async Task FinishAsync()
+    {
+        if (_session is not { Listening: true } s) return;
+        s.Listening = false;
+        _holdWatch.Stop();
+        s.Mic?.Dispose();
+        s.Mic = null;
+        s.Overlay.StopTracking();
+        _view.SetAssistantLevel(0);
+        _view.SetAssistantStatus("Thinking");
+        _view.Panel.ShowThinking();
+        _ = SayStillThinkingAsync(s);
+
+        try
+        {
+            try
+            {
+                await s.Connect;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !s.Cts.IsCancellationRequested)
+            {
+                Debug.WriteLine($"Transcription connect failed: {ex.Message}");
+                throw new AgentException("Couldn't reach Gemini. Check your connection.");
+            }
+            string text = await s.Transcriber.FinishAsync();
+            if (_session != s) return;
+            _view.Panel.SetTranscript(text, "");
+
+            var images = s.Overlay.Captures.ToList();
+            if (text.Trim().Length == 0 && images.Count == 0)
+            {
+                _view.SetAssistantStatus("Didn't hear you");
+                _view.Panel.ShowError("I didn't catch that.", "Hold Ctrl+Alt while you speak, then let go.");
+                _view.EndAssistant(TimeSpan.FromSeconds(3.5));
+                return;
+            }
+            if (text.Trim().Length == 0)
+            {
+                // Circled, but nothing asked: send nothing yet, and wait to be told what to do with it.
+                s.KeepOverlay = true;
+                _pending = s.Overlay;
+                _pendingTimer.Start();
+                _view.SetAssistantStatus("Waiting");
+                _view.Panel.ShowWaiting(images.Count);
+                return;
+            }
+
+            List<AppEntry> apps;
+            try { apps = await AppIndex.GetAsync().WaitAsync(TimeSpan.FromSeconds(3), s.Cts.Token); }
+            catch (TimeoutException) { apps = AppIndex.Apps; }
+            var names = apps.Select(a => a.Name).Take(400).ToList();
+
+            string context = $"Current time: {DateTime.Now:dddd yyyy-MM-dd HH:mm}.\n{_routines.DescribeForModel()}";
+            var reply = await GeminiAgent.AskAsync(s.Key, text, images, names, context, s.Cts.Token);
+            if (_session != s) return;
+
+            if (reply.Calls.Count > 0)
+            {
+                var results = reply.Calls.Select(call => AssistantActions.Run(call, _routines)).ToList();
+                _view.Panel.ShowResults(results);
+                _view.SetAssistantStatus(results.All(r => r.Ok) ? "Done" : "Hmm");
+                await SpeakThenEndAsync(string.Join(". ", results.Select(r => r.Text)), TimeSpan.FromSeconds(3.5));
+            }
+            else if (reply.Text.Length > 0)
+            {
+                _view.Panel.ShowAnswer(reply.Text);
+                _view.SetAssistantStatus("Answered");
+                // Long enough to read, longer for longer answers.
+                await SpeakThenEndAsync(reply.Text, TimeSpan.FromSeconds(Math.Clamp(4 + reply.Text.Length * 0.06, 6, 20)));
+            }
+            else
+            {
+                const string unsure = "I'm not sure how to help with that.";
+                _view.Panel.ShowError(unsure);
+                _view.SetAssistantStatus("Hmm");
+                await SpeakThenEndAsync(unsure, TimeSpan.FromSeconds(4));
+            }
+        }
+        catch (AgentException ex)
+        {
+            if (_session != s) return;
+            _view.Panel.ShowError(ex.Message);
+            _view.SetAssistantStatus("Oops");
+            await SpeakThenEndAsync(ex.Message, TimeSpan.FromSeconds(5));
+        }
+        catch (OperationCanceledException) when (s.Cts.IsCancellationRequested)
+        {
+            // Superseded by a new press, or dismissed.
+        }
+        finally
+        {
+            if (_session == s) _session = null;
+            s.Dispose();
+        }
+    }
+
+    /// <summary>Reads text aloud in the chosen voice (for routine reminders); returns how long it lasts.</summary>
+    public Task<TimeSpan> SayAsync(string text) => _speaker.SpeakAsync(text, _settings.AssistantVoice);
+
+    /// <summary>Reads the reply aloud (if the voice is on) and keeps the card up until it's been heard.</summary>
+    private async Task SpeakThenEndAsync(string text, TimeSpan readingTime)
+    {
+        // Quotes around search terms read awkwardly aloud.
+        var spoken = await _speaker.SpeakAsync(text.Replace("“", "").Replace("”", ""), _settings.AssistantVoice);
+        if (spoken > TimeSpan.Zero) _view.SpeakingFor(spoken);
+        var heard = spoken + TimeSpan.FromSeconds(1.5);
+        _view.EndAssistant(heard > readingTime ? heard : readingTime);
+    }
+
+    private async Task SayStillThinkingAsync(Session s)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(6));
+        if (_session == s && !s.Cts.IsCancellationRequested) _view.Panel.ShowThinking("Still thinking");
+    }
+
+    /// <summary>
+    /// Abandons the current session, and any circled areas still waiting for instructions. Nothing
+    /// more is sent (audio already streamed for transcription has been sent).
+    /// </summary>
+    public void Stop()
+    {
+        _holdWatch.Stop();
+        _speaker.Stop();
+        TakePending()?.FadeAndClose();
+        var s = _session;
+        _session = null;
+        s?.Dispose();
+    }
+
+    private TrailOverlay? TakePending()
+    {
+        _pendingTimer.Stop();
+        var pending = _pending;
+        _pending = null;
+        return pending;
+    }
+
+    public void Dispose()
+    {
+        Stop();
+        _speaker.Dispose();
+        _chord.Dispose();
+    }
+}

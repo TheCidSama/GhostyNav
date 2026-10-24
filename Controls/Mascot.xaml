@@ -1,0 +1,12 @@
+<UserControl x:Class="GhostyNav.Controls.Mascot"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Width="48" Height="46" IsHitTestVisible="False">
+    <!-- Pixel-art ghost: a 24x22 sprite drawn at 2x with hard pixels. -->
+    <Image x:Name="Sprite" Width="48" Height="44" VerticalAlignment="Bottom"
+           RenderOptions.BitmapScalingMode="NearestNeighbor" SnapsToDevicePixels="True">
+        <Image.RenderTransform>
+            <TranslateTransform x:Name="Float" />
+        </Image.RenderTransform>
+    </Image>
+</UserControl>

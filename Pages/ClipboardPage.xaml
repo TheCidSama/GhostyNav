@@ -1,0 +1,77 @@
+<UserControl x:Class="GhostyNav.Pages.ClipboardPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Margin="12,2,12,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="30" />
+        </Grid.RowDefinitions>
+
+        <DockPanel Margin="0,0,0,8">
+            <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE713;" FontSize="12" Width="28" Height="28"
+                    Margin="4,0,0,0" Foreground="{StaticResource SubTextBrush}" Click="OnSettings" ToolTip="History options" />
+            <StackPanel x:Name="Filters" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,0,0" />
+            <TextBox x:Name="SearchBox" Style="{StaticResource SearchField}" Height="34" FontSize="12.5" />
+        </DockPanel>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="228" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <ListBox x:Name="List" Style="{StaticResource PlainList}" SelectionChanged="OnSelectionChanged"
+                     MouseDoubleClick="OnDoubleClick" />
+            <TextBlock x:Name="EmptyText" FontSize="11.5" Foreground="{StaticResource SubTextBrush}" TextWrapping="Wrap"
+                       VerticalAlignment="Center" HorizontalAlignment="Center" TextAlignment="Center" Visibility="Collapsed"
+                       Text="Copy something and it shows up here." Width="180" />
+
+            <Border Grid.Column="2" Style="{StaticResource Card}" Padding="14,12">
+                <DockPanel>
+                    <Grid DockPanel.Dock="Bottom" x:Name="Meta" Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="56" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition />
+                            <RowDefinition />
+                            <RowDefinition />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="Type" FontSize="10.5" Foreground="{StaticResource SubTextBrush}" />
+                        <TextBlock Text="Size" Grid.Row="1" FontSize="10.5" Foreground="{StaticResource SubTextBrush}" Margin="0,3,0,0" />
+                        <TextBlock Text="Copied" Grid.Row="2" FontSize="10.5" Foreground="{StaticResource SubTextBrush}" Margin="0,3,0,0" />
+                        <TextBlock x:Name="MetaType" Grid.Column="1" FontSize="10.5" FontWeight="SemiBold" />
+                        <TextBlock x:Name="MetaSize" Grid.Column="1" Grid.Row="1" FontSize="10.5" FontWeight="SemiBold" Margin="0,3,0,0"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock x:Name="MetaCopied" Grid.Column="1" Grid.Row="2" FontSize="10.5" FontWeight="SemiBold" Margin="0,3,0,0" />
+                    </Grid>
+                    <Grid ClipToBounds="True">
+                        <TextBlock x:Name="PreviewText" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" LineHeight="18"
+                                   TextTrimming="CharacterEllipsis" />
+                        <Border x:Name="PreviewImageHost" CornerRadius="8" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                Visibility="Collapsed" />
+                    </Grid>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <DockPanel Grid.Row="2" VerticalAlignment="Center">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <TextBlock Text="↑↓ Move • Tab Filter" FontSize="10" Foreground="{StaticResource SubTextBrush}" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal">
+                <Border Style="{StaticResource KeyHint}"><TextBlock Text="↵" FontSize="9.5" /></Border>
+                <TextBlock Text="Paste" FontSize="10" Foreground="{StaticResource SubTextBrush}" Margin="0,0,10,0" VerticalAlignment="Center" />
+                <Border Style="{StaticResource KeyHint}"><TextBlock Text="Ctrl C" FontSize="9.5" /></Border>
+                <TextBlock Text="Copy" FontSize="10" Foreground="{StaticResource SubTextBrush}" Margin="0,0,10,0" VerticalAlignment="Center" />
+                <Border Style="{StaticResource KeyHint}"><TextBlock Text="Ctrl P" FontSize="9.5" /></Border>
+                <TextBlock Text="Pin" FontSize="10" Foreground="{StaticResource SubTextBrush}" Margin="0,0,10,0" VerticalAlignment="Center" />
+                <Border Style="{StaticResource KeyHint}"><TextBlock Text="Del" FontSize="9.5" /></Border>
+                <TextBlock Text="Remove" FontSize="10" Foreground="{StaticResource SubTextBrush}" VerticalAlignment="Center" />
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</UserControl>

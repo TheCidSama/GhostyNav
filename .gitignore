@@ -1,0 +1,11 @@
+bin/
+obj/
+publish/
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.log
+# App data (settings, encrypted keys) lives in %LOCALAPPDATA%\GhostyNav and must never be committed
+*.dat

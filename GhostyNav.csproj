@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- Windows SDK TFM gives access to WinRT APIs (media sessions, radios, power) -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <RootNamespace>GhostyNav</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>GhostyNav</AssemblyName>
+
+    <!-- What Task Manager and Explorer show: the exe's name, description and icon -->
+    <ApplicationIcon>Assets\GhostyNav.ico</ApplicationIcon>
+    <Product>GhostyNav</Product>
+    <AssemblyTitle>GhostyNav</AssemblyTitle>
+    <Company>GhostyNav</Company>
+    <Copyright>Copyright (c) 2026 GhostyNav contributors</Copyright>
+    <Version>1.0.0</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+
+    <!-- Low-memory runtime settings: workstation, non-concurrent GC that
+         gives memory back to the OS aggressively -->
+    <ServerGarbageCollector>false</ServerGarbageCollector>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <TieredPGO>true</TieredPGO>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="7" />
+    <RuntimeHostConfigurationOption Include="System.GC.RetainVM" Value="false" />
+  </ItemGroup>
+
+</Project>
