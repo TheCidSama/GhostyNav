@@ -19,7 +19,7 @@
     <AssemblyTitle>GhostyNav</AssemblyTitle>
     <Company>GhostyNav</Company>
     <Copyright>Copyright (c) 2026 GhostyNav contributors</Copyright>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 
     <!-- Low-memory runtime settings: workstation, non-concurrent GC that
@@ -28,6 +28,9 @@
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
     <TieredPGO>true</TieredPGO>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+
+    <!-- The installer is its own project, and publish\ holds build output -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);installer\**;publish\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>

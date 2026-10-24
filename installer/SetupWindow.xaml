@@ -1,0 +1,185 @@
+<Window x:Class="GhostyNav.Setup.SetupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="GhostyNav Setup" Width="460" SizeToContent="Height"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent" ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen" UseLayoutRounding="True"
+        FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13" Foreground="#E8E8EC"
+        KeyDown="OnKeyDown">
+
+    <Window.Resources>
+        <SolidColorBrush x:Key="Accent" Color="#A78BFA" />
+
+        <Style x:Key="Option" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#C8C8CE" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Grid Background="Transparent">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="Box" Width="18" Height="18" CornerRadius="5" VerticalAlignment="Top" Margin="0,1,0,0"
+                                    Background="#18181D" BorderBrush="#34343C" BorderThickness="1">
+                                <Path x:Name="Tick" Data="M 3.5,8.5 L 7,12 L 13.5,5" Stroke="#0B0B0D" StrokeThickness="2"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Visibility="Collapsed" />
+                            </Border>
+                            <ContentPresenter Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" RecognizesAccessKey="False" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Box" Property="BorderBrush" Value="#55555F" />
+                                <Setter Property="Foreground" Value="#F0F0F4" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Box" Property="Background" Value="{StaticResource Accent}" />
+                                <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource Accent}" />
+                                <Setter TargetName="Tick" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="Primary" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource Accent}" />
+            <Setter Property="Foreground" Value="#0B0B0D" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Height" Value="44" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid x:Name="Root" RenderTransformOrigin="0.5,0.5">
+                            <Grid.RenderTransform>
+                                <ScaleTransform />
+                            </Grid.RenderTransform>
+                            <Border Background="{TemplateBinding Background}" CornerRadius="13" />
+                            <Border x:Name="Hover" Background="White" Opacity="0" CornerRadius="13" />
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Hover" Property="Opacity" Value="0.12" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <ScaleTransform ScaleX="0.98" ScaleY="0.98" />
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="Plain" TargetType="Button">
+            <Setter Property="Foreground" Value="#7A7A84" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="Transparent" CornerRadius="9">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#1C1C22" />
+                                <Setter Property="Foreground" Value="#E8E8EC" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.3" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <!-- Room around the card for its shadow -->
+    <Grid Margin="20">
+        <Border CornerRadius="26" Background="#0B0B0D">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="30" ShadowDepth="4" Opacity="0.55" />
+            </Border.Effect>
+        </Border>
+
+        <Border CornerRadius="26" Background="#0B0B0D" BorderBrush="#1F1F26" BorderThickness="1"
+                MouseLeftButtonDown="OnDrag" ClipToBounds="True">
+            <Grid>
+                <!-- A soft lavender glow over the ghost, like the assistant's halo -->
+                <Ellipse Width="420" Height="260" Margin="0,-150,0,0" VerticalAlignment="Top" IsHitTestVisible="False">
+                    <Ellipse.Fill>
+                        <RadialGradientBrush>
+                            <GradientStop Color="#40A78BFA" Offset="0" />
+                            <GradientStop Color="#00A78BFA" Offset="1" />
+                        </RadialGradientBrush>
+                    </Ellipse.Fill>
+                </Ellipse>
+
+                <Button x:Name="CloseButton" Style="{StaticResource Plain}" Width="30" Height="30" Margin="0,14,14,0"
+                        HorizontalAlignment="Right" VerticalAlignment="Top" ToolTip="Close" Click="OnClose">
+                    <Path Data="M 0,0 L 9,9 M 9,0 L 0,9" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                          StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                </Button>
+
+                <StackPanel Margin="34,34,34,24">
+                    <Image Source="ghosty.png" Width="72" Height="66" HorizontalAlignment="Center"
+                           RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                    <TextBlock x:Name="Heading" Text="GhostyNav" FontFamily="Segoe UI Variable Display, Segoe UI" FontSize="26"
+                               FontWeight="SemiBold" Foreground="White" HorizontalAlignment="Center" Margin="0,14,0,0" />
+                    <TextBlock x:Name="Tagline" Text="A notch for your desktop, with a little ghost who listens."
+                               Foreground="#8E8E96" TextAlignment="Center" TextWrapping="Wrap" Margin="0,6,0,0" />
+
+                    <StackPanel x:Name="InstallChoices" Margin="0,26,0,0">
+                        <CheckBox x:Name="StartupBox" Style="{StaticResource Option}" IsChecked="True" Content="Start GhostyNav when I sign in" />
+                        <CheckBox x:Name="PathBox" Style="{StaticResource Option}" IsChecked="True" Margin="0,13,0,0">
+                            <TextBlock TextWrapping="Wrap">Add to PATH, so <Run FontFamily="Cascadia Mono, Consolas" Foreground="#C9B8FF">ghostynav</Run> starts it from a terminal</TextBlock>
+                        </CheckBox>
+                        <CheckBox x:Name="DesktopBox" Style="{StaticResource Option}" Margin="0,13,0,0" Content="Add a desktop shortcut" />
+                    </StackPanel>
+
+                    <StackPanel x:Name="UninstallChoices" Margin="0,26,0,0" Visibility="Collapsed">
+                        <CheckBox x:Name="PurgeBox" Style="{StaticResource Option}">
+                            <TextBlock TextWrapping="Wrap">Also delete my settings, API key, clipboard history and routines</TextBlock>
+                        </CheckBox>
+                    </StackPanel>
+
+                    <TextBlock x:Name="Note" Foreground="#6E6E78" FontSize="12" TextWrapping="Wrap" Margin="0,20,0,0" LineHeight="18" />
+
+                    <StackPanel x:Name="ProgressPanel" Margin="0,20,0,0" Visibility="Collapsed">
+                        <TextBlock x:Name="Status" Foreground="#B4B4BC" FontSize="12" TextWrapping="Wrap" />
+                        <Grid Height="4" Margin="0,10,0,0">
+                            <Border Background="#1C1C22" CornerRadius="2" />
+                            <Border x:Name="Bar" Background="{StaticResource Accent}" CornerRadius="2" RenderTransformOrigin="0,0.5">
+                                <Border.RenderTransform>
+                                    <ScaleTransform x:Name="BarScale" ScaleX="0" />
+                                </Border.RenderTransform>
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+
+                    <Button x:Name="Primary" Style="{StaticResource Primary}" Content="Install" Margin="0,22,0,0"
+                            IsDefault="True" Click="OnPrimary" />
+                    <TextBlock x:Name="Footer" Foreground="#4E4E57" FontSize="11" HorizontalAlignment="Center" Margin="0,14,0,0" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
