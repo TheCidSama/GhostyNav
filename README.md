@@ -11,9 +11,14 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/TheCidSama/GhostyNav/releases/latest/download/GhostyNav-Setup.exe"><img src="https://img.shields.io/badge/Download-GhostyNav--Setup.exe-A78BFA?style=for-the-badge" alt="Download GhostyNav-Setup.exe"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/TheCidSama/GhostyNav/releases/latest"><img src="https://img.shields.io/github/v/release/TheCidSama/GhostyNav?color=a78bfa" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-a78bfa" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6" alt="Windows 10 and 11">
-  <img src="https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white" alt=".NET 10">
+  <img src="https://img.shields.io/badge/RAM-~27%20MB%20idle-2ea44f" alt="About 27 MB of RAM when idle">
   <img src="https://img.shields.io/badge/AI-Gemini-8E75B2?logo=googlegemini&logoColor=white" alt="Powered by Gemini">
 </p>
 
@@ -24,15 +29,63 @@
 ---
 
 GhostyNav puts a small black notch at the top centre of your screen, flush with the edge like a
-MacBook's. It stays out of the way until you need it: click it and it springs open into a panel of
-tabs; hover it while music plays and a mini player drops down. Hold <kbd>Ctrl</kbd>+<kbd>Alt</kbd> and the
-notch opens around a pixel-art ghost that listens, watches what you circle on screen, and gets things
-done.
+MacBook's. Click it and it springs open into a panel of tabs. Hover it while music plays and a mini
+player drops down. Hold <kbd>Ctrl</kbd>+<kbd>Alt</kbd> and a pixel-art ghost listens, looks at whatever
+you circle on screen, and gets things done. All of that in about 27 MB of memory.
 
-It's a Windows desktop app written in C# on .NET 10 with no third-party packages, and it's built to
-be light: a media player, control centre, calendar, system monitor, clipboard history, app launcher
-and voice assistant in one notch, using **about 27 MB of memory when idle** and next to no CPU
-([measurements](#light-on-your-pc)).
+## Highlights
+
+- **Talk to it.** Hold <kbd>Ctrl</kbd>+<kbd>Alt</kbd>, speak, let go. It opens apps, searches YouTube and
+  the web, answers questions and sets up reminders, out loud if you like.
+- **Point at things.** Circle anything on screen with a neon trail and ask about it.
+- **Control centre.** Wi-Fi, Bluetooth, sound output, Night Light, dark mode and volume, one click away.
+- **Now playing.** Album art, a glow in the colours of the cover and a wavy timeline you can drag,
+  from Spotify or any media app.
+- **Your day.** Clock, weather, the week ahead, a timer and a to-do list.
+- **System stats.** Live CPU, GPU and RAM gauges, the busiest apps and an internet speed test.
+- **Clipboard history.** Text, links, images and files, pasted back with <kbd>Enter</kbd>.
+- **App launcher.** Fuzzy search over everything in your Start menu.
+- **Light.** About 27 MB of memory and no CPU to speak of while it waits.
+
+## Install
+
+1. Download **[GhostyNav-Setup.exe](https://github.com/TheCidSama/GhostyNav/releases/latest/download/GhostyNav-Setup.exe)**
+   (6.4 MB) from the [latest release](https://github.com/TheCidSama/GhostyNav/releases/latest).
+2. Run it and click **Install**. Setup:
+   - installs GhostyNav just for you, with no admin rights needed
+   - adds it to the Start menu and to your **PATH**, so typing `ghostynav` in any new terminal starts it
+   - can start it when you sign in and add a desktop shortcut, if you leave those boxes ticked
+   - gets the free **.NET 10 Desktop Runtime** from Microsoft if your PC doesn't have it yet
+     (Windows asks for permission once)
+3. Click **Open GhostyNav**. The notch appears at the top of your screen.
+
+The installer isn't code-signed yet, so Windows SmartScreen may say it protected your PC. Click
+**More info**, then **Run anyway**.
+
+To **update**, run the newer Setup; your settings stay. To **uninstall**, go to **Settings › Apps ›
+Installed apps › GhostyNav › Uninstall**. It removes the app, its shortcuts and its PATH entry, and
+only deletes your settings if you ask it to.
+
+<details>
+<summary>Installing from a script</summary>
+
+| Command | Does |
+| --- | --- |
+| `GhostyNav-Setup.exe /quiet` | Installs without a window, with the default choices |
+| `/nostartup`, `/nopath`, `/desktop`, `/launch` | Added after `/quiet`: don't start at sign-in, don't add to PATH, add a desktop shortcut, open it when done |
+| `"%LOCALAPPDATA%\Programs\GhostyNav\uninstall.exe" /quiet` | Uninstalls without a window (add `/purge` to delete settings too) |
+
+</details>
+
+**You'll need** 64-bit Windows 11, or Windows 10 version 2004 or later. For the assistant, a
+microphone and a free Gemini API key.
+
+### Add your Gemini key
+
+1. Get a free key from [Google AI Studio](https://aistudio.google.com/apikey).
+2. Click the notch, tap the gear tile in **Controls**, paste the key and press **Save**. GhostyNav
+   checks that it works without using any of your quota.
+3. Hold <kbd>Ctrl</kbd>+<kbd>Alt</kbd> and say hello.
 
 ## Meet Ghosty
 
@@ -47,71 +100,61 @@ The ghost lives in the notch and shows you what it's doing.
   </tr>
 </table>
 
-It blinks, its hem ripples, and it reads its replies aloud if you want it to. There are no image
-files behind it: every frame is drawn from code, pixel by pixel.
+It blinks, its hem ripples, and it reads its replies aloud in a female or male voice if you want it to.
 
 ## The voice assistant
 
 1. **Hold <kbd>Ctrl</kbd>+<kbd>Alt</kbd>.** The notch drops down, the ghost starts listening and a soft
-   blue glow rises along the edges of your screen, brightening with your voice. What you say appears
-   under the notch as you say it.
-2. **Point if you like.** While you hold the keys your cursor leaves a neon lavender trail. Draw a
-   loop around anything on screen (a word, an error message, a photo, a chart) and that area goes
-   along with your question. Going round the same thing again doesn't count twice.
-3. **Let go.** Gemini works out what you meant and GhostyNav does it, or answers in the card and,
-   if you turned it on, out loud.
-
-Things you can say:
+   blue glow rises along the edges of your screen, brightening with your voice. Your words appear
+   under the notch as you say them.
+2. **Point if you like.** While you hold the keys, your cursor leaves a neon lavender trail. Loop it
+   around anything on screen (a word, an error message, a photo, a chart) and that area goes along
+   with your question.
+3. **Let go.** GhostyNav does what you asked, or answers in a card that tidies itself away after a
+   few seconds.
 
 | You say | GhostyNav |
 | --- | --- |
-| "Open Spotify" | opens the app from your Start menu |
+| "Open Spotify" | opens the app |
 | "Search YouTube for lo-fi beats" | opens YouTube results in your browser |
-| "Look up train times to Kyoto" | searches the web in your default browser |
+| "Look up train times to Kyoto" | searches the web |
 | "Open github.com" | opens the site |
-| *(circle a word)* "What does this mean?" | answers in a sentence or three |
-| *(circle an error)* "How do I fix this?" | explains it, using what it sees |
-| "Remind me to stretch every day at 3" | sets up a routine |
+| *(circle a word)* "What does this mean?" | explains it in a sentence or three |
+| *(circle an error)* "How do I fix this?" | tells you, using what it sees |
+| "Remind me to stretch every day at 3" | sets up a reminder |
 | "Open Spotify every weekday at 9" | sets up a routine that runs on its own |
 | "What routines do I have?" / "Delete the stretch one" | reads or changes your routines |
 
-**Circled something but not sure what to ask?** Let go without speaking and nothing is sent. The
-area stays highlighted and the ghost waits; hold <kbd>Ctrl</kbd>+<kbd>Alt</kbd> again within a minute and
-say what you want.
+**Circled something but not sure what to ask?** Let go without speaking. The area stays highlighted
+and the ghost waits; hold <kbd>Ctrl</kbd>+<kbd>Alt</kbd> again within a minute and say what you want.
 
 **Routines** are reminders and actions the assistant schedules for you: once, every day, on weekdays,
-on chosen days, or every so many minutes. Reminders drop down from the notch (and are read aloud if
-the voice is on); actions just happen. Every routine is listed in Settings with a delete button, so
-nothing runs that you can't see.
+on chosen days, or every few minutes. Reminders drop down from the notch; actions just happen. You
+can see and delete every routine in Settings.
 
 ## The notch
 
 Click the notch to open it. It resizes to fit each tab, and you can switch tabs by clicking, by
-dragging sideways, with a two-finger swipe on a touchpad, with the mouse wheel over the tab bar, or
-from the keyboard.
+dragging sideways, with a two-finger swipe, with the mouse wheel or from the keyboard.
 
 | Tab | What's in it |
 | --- | --- |
-| **Controls** | Wi-Fi, Bluetooth, sound output (mute, or pick a device), Night Light, dark mode, volume, and the now-playing card, glowing in the colours of the cover, with a wavy, draggable timeline. Offers to open Spotify, if you have it, when nothing is playing. |
-| **Today** | A big clock, the weather, this week at a glance, a timer with quick presets, and a to-do list. Ticking a to-do off splashes green. |
-| **Stats** | Live CPU, GPU and RAM gauges that fill up as you open the tab, disk, network, uptime, the apps using the most RAM or CPU, and an internet speed test whose numbers count up as they're measured. |
-| **Clipboard** | Your clipboard history (text, links, images, files) with search, filters and pins. Press <kbd>Enter</kbd> to paste an item straight into the app you were using. |
-| **Apps** | Every real app in your Start menu with its own icon (no consoles, admin tools or uninstallers), fuzzy search, stars and recents, and a web search when nothing matches. |
+| **Controls** | Wi-Fi, Bluetooth, sound output, Night Light, dark mode and volume, plus the now-playing card glowing in the colours of the cover, with a wavy timeline you can drag. Offers to open Spotify when nothing is playing. The gear tile opens **Settings**: your Gemini key, the listening glow, the voice and your routines. |
+| **Today** | A big clock, the weather, the week at a glance, a timer with quick presets and a to-do list that splashes green when you tick things off. |
+| **Stats** | CPU, GPU and RAM gauges that fill up as you open the tab, disk, network, uptime, the apps using the most, and a speed test whose numbers count up live. |
+| **Clipboard** | Your clipboard history (text, links, images and files) with search, filters and pins. <kbd>Enter</kbd> pastes straight into the app you were using. |
+| **Apps** | Every app in your Start menu with its icon, fuzzy search, favourites and recents, and a web search when nothing matches. |
 | **Power** | Lock, sleep, restart and shut down. Restart and shut down ask for a second click. |
-| **Settings** (the gear tile in Controls) | Your Gemini API key, the listening halo, spoken replies (off, female or male voice) and your routines. |
 
-Even closed, the notch keeps you company:
+Closed, the notch still keeps you company:
 
-- **Now playing:** album art and dancing audio bars in the colours of the cover, from Spotify or any
-  app that reports to Windows' media controls.
-- **Mini player:** hover the notch, or skip a track, and a player with the wavy timeline drops down,
-  lit by the cover.
-- **Timer:** a running countdown shows in the notch when no music is playing.
+- **Now playing:** album art and dancing bars in the colours of the cover.
+- **Mini player:** hover the notch, or skip a track, and a player drops down.
+- **Timer:** a running countdown shows in the notch.
 - **Reminders:** routines drop down when they're due.
-- **Out of the way:** it hides itself while a game or video runs fullscreen, and never shows up in
-  Alt+Tab or the taskbar.
+- **Out of the way:** it steps aside for fullscreen games and videos, and stays out of Alt+Tab and the taskbar.
 
-Right-click the notch for **Start with Windows** and **Exit**.
+Right-click the notch to turn **Start with Windows** on or off, or to exit.
 
 ## Shortcuts
 
@@ -124,74 +167,9 @@ Right-click the notch for **Start with Windows** and **Exit**.
 | <kbd>Ctrl</kbd>+<kbd>7</kbd> | Open Settings |
 | <kbd>Ctrl</kbd>+<kbd>Tab</kbd>, <kbd>←</kbd> <kbd>→</kbd> | Next or previous tab |
 | <kbd>Esc</kbd> | Close the notch |
-| Any other key while holding <kbd>Ctrl</kbd>+<kbd>Alt</kbd> | Cancel the assistant |
-| In Clipboard: <kbd>↑</kbd> <kbd>↓</kbd>, <kbd>Enter</kbd>, <kbd>Ctrl</kbd>+<kbd>C</kbd>, <kbd>Ctrl</kbd>+<kbd>P</kbd>, <kbd>Del</kbd>, <kbd>Tab</kbd> | Move, paste, copy, pin, remove, change filter |
-
-The assistant only starts after a third of a second, so quick shortcuts that use
-<kbd>Ctrl</kbd>+<kbd>Alt</kbd> (and typing with <kbd>AltGr</kbd>) aren't affected.
-
-## Getting started
-
-### You'll need
-
-- 64-bit **Windows 11**, or Windows 10 version 2004 or later. It looks best on Windows 11, which has
-  the Segoe Fluent Icons font.
-- The **[.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)** to build it.
-- For the assistant: a **microphone** and a **Gemini API key**. A free key from
-  [Google AI Studio](https://aistudio.google.com/apikey) works; the free tier has daily limits.
-
-### Build and run
-
-```powershell
-git clone https://github.com/TheCidSama/GhostyNav.git
-cd GhostyNav
-dotnet run -c Release
-```
-
-Or build once with `dotnet build -c Release` and run
-`bin\Release\net10.0-windows10.0.19041.0\GhostyNav.exe`. It shows up in Task Manager as GhostyNav,
-with the ghost as its icon.
-
-### Add your Gemini key
-
-Click the notch, tap the gear tile in **Controls**, paste your key and press **Save**. GhostyNav checks
-that it works, which doesn't use any of your quota. You can also set a `GEMINI_API_KEY` environment
-variable instead; a key saved in Settings takes priority.
-
-Then hold <kbd>Ctrl</kbd>+<kbd>Alt</kbd> and say hello.
-
-## Privacy
-
-GhostyNav has no accounts, no analytics and no telemetry. This is everything that leaves your PC, and when:
-
-| When | Sent to | What |
-| --- | --- | --- |
-| While you hold <kbd>Ctrl</kbd>+<kbd>Alt</kbd> | Google Gemini | Your microphone audio, streamed for live transcription |
-| When you let go after speaking | Google Gemini | What you said, any areas you circled (as images), the current time, your routines and the names of your installed apps |
-| When you circle but don't speak | Nobody | Nothing is sent until you say what you want |
-| When you click the weather | Open-Meteo | Your approximate location, rounded to about a kilometre |
-| When you run the speed test | Cloudflare | Test data only |
-
-Searches you ask for open in your own browser, on Google or YouTube.
-
-The microphone is only on while you hold the keys. The assistant's own windows (the ghost, the card,
-the trail and the glow) are hidden from screen capture, so they never end up in what's sent. Your data stays in
-`%LOCALAPPDATA%\GhostyNav`. Your API key, your weather location and the speed test's city are
-encrypted there with Windows' DPAPI, so only your Windows account on your PC can read them.
-
-Two things worth knowing:
-
-- **Clipboard history is stored as plain files.** Copies that password managers mark as private are
-  skipped, but anything else you copy is kept until it scrolls out of the last 60 items (pinned items
-  stay). Clear it from the Clipboard tab's options.
-- **The assistant acts on what it hears and sees.** Text inside an area you circle, or a voice near
-  your microphone, can steer what it does, and it doesn't ask before opening things. It can only open
-  web links and apps from your Start menu, and routines are capped at 20 and can't repeat more often
-  than every 5 minutes.
+| In Clipboard: <kbd>↑</kbd> <kbd>↓</kbd>, <kbd>Enter</kbd>, <kbd>Ctrl</kbd>+<kbd>C</kbd>, <kbd>Ctrl</kbd>+<kbd>P</kbd>, <kbd>Del</kbd> | Move, paste, copy, pin, remove |
 
 ## Light on your PC
-
-Everything above lives in a single small process. Here is what it uses:
 
 | What GhostyNav is doing | Memory | CPU |
 |---|---|---|
@@ -199,61 +177,44 @@ Everything above lives in a single small process. Here is what it uses:
 | Open, moving between all seven pages | 45 to 58 MB | under 0.5 % with the live Stats gauges |
 | Closed again after opening every page | 50 MB | 0.00 % |
 
-<sub>Measured on Windows 11 with a Ryzen 5 8600G (12 threads), Release build. Memory is the figure
-Task Manager shows in its Memory column (private working set); CPU is the share of the whole machine,
-averaged over 15 to 30 seconds. The Apps page includes every Start menu icon and the Clipboard page
-the saved history. Tools that show the full working set report around 110 MB when idle; most of that
-is Windows and .NET libraries shared with other apps.</sub>
+<sub>Measured on Windows 11 with a Ryzen 5 8600G. Memory is the figure in Task Manager's Memory
+column; CPU is the share of the whole machine.</sub>
 
-Why it stays small:
+Pages are only built the first time you open them, nothing is redrawn while the notch is idle, and
+stats only update while you're looking at them.
 
-- **Memory:** each page is built the first time you open it, not at startup, and app icons are
-  loaded once at the size they're shown.
-- **Rendering:** when nothing on the notch is moving, nothing is redrawn. Animations run on demand
-  at modest frame rates and stop as soon as they're done.
-- **Polling:** the stats, the clock and the media position only update while they're on screen,
-  and system counters are read off the UI thread so animations never wait for them.
+## Privacy
 
-## How it's built
+No accounts, no analytics, no telemetry. This is everything that leaves your PC:
 
-- **WPF on .NET 10**, no third-party packages. It talks to Windows directly: media sessions, Core
-  Audio, WinRT radios, performance counters, a low-level keyboard hook, the classic `waveIn`
-  microphone API and DPAPI.
-- **The notch** is a transparent, click-through window; only the black shape takes input. Its
-  outline (flush top, flared shoulders, sloped sides) is rebuilt every frame from damped springs, so
-  opening and closing stay smooth even when interrupted halfway.
-- **The ghost** is a procedural 24×22 sprite, shaded and outlined in code and drawn with hard pixels.
-  The app icon is rendered from the same sprite.
-- **The neon trail** is a centripetal Catmull-Rom spline drawn as one ribbon per glow layer, so it
-  has no visible joints and tapers into a soft tail.
-- **The assistant** streams your voice to the Gemini Live API (`gemini-3.5-transcribe-live`) over a
-  WebSocket, then asks `gemini-3.5-flash` (falling back to `gemini-3.5-flash-lite`) what to do,
-  using function calling with thinking kept to a minimum. Replies are spoken with the voices built
-  into Windows.
+| When | Sent to | What |
+| --- | --- | --- |
+| While you hold <kbd>Ctrl</kbd>+<kbd>Alt</kbd> | Google Gemini | Your voice, for live transcription |
+| When you let go after speaking | Google Gemini | What you said, any areas you circled, the time, your routines and the names of your apps |
+| When you click the weather | Open-Meteo | Your approximate location |
+| When you run the speed test | Cloudflare | Test data only |
 
-```
-GhostyNav/
-├── App.xaml / .cs          app start, theme and shared styles
-├── MainWindow.xaml / .cs   the notch: shape, springs, tabs, peeks and the assistant's look
-├── Controls/               ghost sprite and mascot, media card, wavy timeline, effects
-├── Pages/                  one file pair per tab
-├── Services/               media, audio, radios, clipboard, apps, stats, weather, storage
-│   └── Assistant/          hotkey, microphone, live transcription, Gemini, routines, trail, voice
-└── Assets/GhostyNav.ico    the ghost, as the app icon
+The microphone is only on while you hold the keys, and if you let go without speaking, no question
+or circled area is sent. Your API key and location are encrypted on your PC with Windows' own
+protection. Clipboard history stays on your PC too, as plain files you can clear from the Clipboard
+tab; copies that password managers mark as private are never saved. The assistant opens apps and
+links without asking first, so keep an eye on what you circle.
+
+## Build from source
+
+With the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0):
+
+```powershell
+git clone https://github.com/TheCidSama/GhostyNav.git
+cd GhostyNav
+dotnet run -c Release
 ```
 
-## Good to know
-
-- The notch, the trail and the halo live on your main monitor.
-- Windows keeps normal apps from seeing keys pressed in apps running as administrator, so
-  <kbd>Ctrl</kbd>+<kbd>Alt</kbd> may not reach the assistant while one of those is focused.
-- Night Light can only be toggled once it has been turned on in Windows Settings at least once.
-- The interface is in English.
-
-## Contributing
+To build the installer, run `powershell -ExecutionPolicy Bypass -File installer\build.ps1`. It
+writes `publish\GhostyNav-Setup.exe`.
 
 Issues and pull requests are welcome. Please keep GhostyNav light: no heavy dependencies, and nothing
-that runs or redraws while the notch is idle. `dotnet build -c Release` is all you need to build.
+that runs or redraws while the notch is idle.
 
 ## License
 
