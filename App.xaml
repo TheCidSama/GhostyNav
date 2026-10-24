@@ -140,11 +140,40 @@
             <Setter Property="Foreground" Value="{StaticResource OnAccentBrush}" />
         </Style>
 
-        <!-- Large tile used on the Power tab -->
-        <Style x:Key="BigTile" TargetType="Button" BasedOn="{StaticResource FlatButton}">
-            <Setter Property="Background" Value="{StaticResource CardBrush}" />
+        <!-- Large tile used on the Power tab: borderless and dim, a shade off the black island,
+             lifting a little under the pointer -->
+        <Style x:Key="BigTile" TargetType="Button">
+            <Setter Property="Background" Value="#121214" />
+            <Setter Property="Foreground" Value="#9C9CA3" />
+            <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Height" Value="62" />
-            <Setter Property="Padding" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <!-- The hover tint is a layer, so a background set on the button (the confirm red) survives it -->
+                        <Grid x:Name="Bg" RenderTransformOrigin="0.5,0.5">
+                            <Border Background="{TemplateBinding Background}" CornerRadius="12" />
+                            <Border x:Name="Hover" Background="#FFFFFF" Opacity="0" CornerRadius="12" />
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Hover" Property="Opacity" Value="0.04" />
+                                <Setter Property="Foreground" Value="#D2D2D8" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bg" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <ScaleTransform ScaleX="0.96" ScaleY="0.96" />
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <!-- Header tab -->

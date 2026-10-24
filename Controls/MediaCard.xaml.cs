@@ -14,6 +14,8 @@ public partial class MediaCard : UserControl
     private readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromMilliseconds(500) };
     private bool _active;
     private double? _seekFraction; // set while the user drags the seek bar
+    private readonly double _glowStrength;
+    private ImageSource? _glowFor; // the cover the glow was made from
 
     public MediaCard(MediaService media, bool chromeless = false)
     {
@@ -23,9 +25,11 @@ public partial class MediaCard : UserControl
         {
             // Inside the peek the island itself is the card.
             Root.Background = Brushes.Transparent;
-            Root.Padding = new Thickness(16, 12, 16, 10);
+            Body.Margin = new Thickness(16, 12, 16, 10);
             SourceRow.Visibility = Visibility.Collapsed;
         }
+        // On the black island the halo can be stronger than on a card.
+        _glowStrength = chromeless ? 0.8 : 0.6;
         _media.Changed += () => { if (_active) Render(); };
         _tick.Tick += (_, _) => RenderProgress();
         Seekbar.SizeChanged += (_, _) => RenderProgress();
@@ -68,9 +72,27 @@ public partial class MediaCard : UserControl
             Art.Background = (Brush)FindResource("TrackBrush");
             ArtPlaceholder.Visibility = Visibility.Visible;
         }
+        RenderGlow();
 
         PlayPause.Content = _media.IsPlaying ? "\uE769" : "\uE768";
         RenderProgress();
+    }
+
+    /// <summary>The cover's colours, stretched smoothly into a soft halo; it fades across when the song changes.</summary>
+    private void RenderGlow()
+    {
+        if (ReferenceEquals(_glowFor, _media.ArtGlow)) return;
+        _glowFor = _media.ArtGlow;
+        if (_media.ArtGlow is not { } glow)
+        {
+            Glow.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, TimeSpan.FromMilliseconds(300)));
+            return;
+        }
+        var brush = new ImageBrush(glow) { Stretch = Stretch.Fill };
+        RenderOptions.SetBitmapScalingMode(brush, BitmapScalingMode.HighQuality); // a smooth blend, not blocks
+        brush.Freeze();
+        Glow.Background = brush;
+        Glow.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, _glowStrength, TimeSpan.FromMilliseconds(450)));
     }
 
     private void RenderProgress()

@@ -14,6 +14,7 @@ public partial class ControlsPage : UserControl, IIslandPage, IResizingPage
     private readonly RadioService _radios;
     private readonly MediaService _media;
     private readonly MediaCard _mediaCard;
+    private readonly IIslandHost _host;
     private bool _visible;
     private bool _spotifyInstalled = SpotifyApp.IsInstalled;
 
@@ -21,9 +22,10 @@ public partial class ControlsPage : UserControl, IIslandPage, IResizingPage
     public Size PreferredSize => new(430, _media.HasSession ? 256 : _spotifyInstalled ? 202 : 146);
     public event Action? PreferredSizeChanged;
 
-    public ControlsPage(AudioService audio, RadioService radios, MediaService media)
+    public ControlsPage(AudioService audio, RadioService radios, MediaService media, IIslandHost host)
     {
         InitializeComponent();
+        _host = host;
         _audio = audio;
         _radios = radios;
         _media = media;
@@ -220,6 +222,8 @@ public partial class ControlsPage : UserControl, IIslandPage, IResizingPage
     }
 
     private void OnNightMore(object sender, RoutedEventArgs e) => Launch("ms-settings:nightlight");
+
+    private void OnSettings(object sender, RoutedEventArgs e) => _host.OpenSettings();
 
     private async void OnDarkClick(object sender, RoutedEventArgs e)
     {

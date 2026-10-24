@@ -2,6 +2,12 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <StackPanel x:Name="Root" Margin="12,2,12,0" VerticalAlignment="Top">
+    <!-- Opened from the gear in Controls; the arrow goes back there -->
+    <StackPanel Orientation="Horizontal" Margin="-4,0,0,6">
+        <Button Style="{StaticResource IconButton}" Content="&#xE72B;" FontSize="12" Width="28" Height="28"
+                Click="OnBack" ToolTip="Back to Controls" />
+        <TextBlock Text="Settings" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" Margin="4,0,0,1" />
+    </StackPanel>
     <Border Style="{StaticResource Card}" Padding="14,12">
         <StackPanel>
             <DockPanel>

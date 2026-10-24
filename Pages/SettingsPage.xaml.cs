@@ -13,6 +13,7 @@ public partial class SettingsPage : UserControl, IIslandPage, IResizingPage
     private static readonly Brush Good = Frozen(0x9B, 0xD4, 0x5A), Bad = Frozen(0xFF, 0x8A, 0x8A);
     private readonly AppSettings _settings;
     private readonly RoutineScheduler _routines;
+    private readonly IIslandHost _host;
     private readonly Speaker _preview = new();
     private int _check; // ignore results of checks that a newer action superseded
 
@@ -28,11 +29,12 @@ public partial class SettingsPage : UserControl, IIslandPage, IResizingPage
 
     public event Action? PreferredSizeChanged;
 
-    public SettingsPage(AppSettings settings, RoutineScheduler routines)
+    public SettingsPage(AppSettings settings, RoutineScheduler routines, IIslandHost host)
     {
         InitializeComponent();
         _settings = settings;
         _routines = routines;
+        _host = host;
         _routines.Changed += () =>
         {
             RenderRoutines();
@@ -208,6 +210,8 @@ public partial class SettingsPage : UserControl, IIslandPage, IResizingPage
         if (problem == null) Status("\uE73E", $"{label} · works", Good);
         else Status("\uE783", problem, Bad);
     }
+
+    private void OnBack(object sender, RoutedEventArgs e) => _host.CloseSettings();
 
     private void OnGetKey(object sender, RoutedEventArgs e)
     {

@@ -28,6 +28,7 @@ public sealed class Assistant : IDisposable
 {
     private static readonly TimeSpan MaxHold = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan PendingTimeout = TimeSpan.FromSeconds(60);
+    private const int LongAnswerChars = 100;
 
     private readonly Dispatcher _ui;
     private readonly IAssistantView _view;
@@ -110,7 +111,7 @@ public sealed class Assistant : IDisposable
             carried?.FadeAndClose();
             _view.SetAssistantStatus("No API key");
             _view.Panel.ShowError("Add your Gemini API key",
-                "Click the notch, open Settings (the gear tab) and paste your key.");
+                "Click the notch, tap the gear in Controls and paste your key.");
             _view.EndAssistant(TimeSpan.FromSeconds(8));
             return;
         }
@@ -234,8 +235,8 @@ public sealed class Assistant : IDisposable
             {
                 _view.Panel.ShowAnswer(reply.Text);
                 _view.SetAssistantStatus("Answered");
-                // Long enough to read, longer for longer answers.
-                await SpeakThenEndAsync(reply.Text, TimeSpan.FromSeconds(Math.Clamp(4 + reply.Text.Length * 0.06, 6, 20)));
+                // 5 s to read a short answer; 10 s for one longer than about two lines on the card.
+                await SpeakThenEndAsync(reply.Text, TimeSpan.FromSeconds(reply.Text.Length > LongAnswerChars ? 10 : 5));
             }
             else
             {
@@ -266,13 +267,16 @@ public sealed class Assistant : IDisposable
     /// <summary>Reads text aloud in the chosen voice (for routine reminders); returns how long it lasts.</summary>
     public Task<TimeSpan> SayAsync(string text) => _speaker.SpeakAsync(text, _settings.AssistantVoice);
 
-    /// <summary>Reads the reply aloud (if the voice is on) and keeps the card up until it's been heard.</summary>
+    /// <summary>
+    /// Reads the reply aloud (if the voice is on), then closes the card after
+    /// <paramref name="readingTime"/>, or once the voice has finished if it talks for longer.
+    /// </summary>
     private async Task SpeakThenEndAsync(string text, TimeSpan readingTime)
     {
         // Quotes around search terms read awkwardly aloud.
         var spoken = await _speaker.SpeakAsync(text.Replace("“", "").Replace("”", ""), _settings.AssistantVoice);
         if (spoken > TimeSpan.Zero) _view.SpeakingFor(spoken);
-        var heard = spoken + TimeSpan.FromSeconds(1.5);
+        var heard = spoken + TimeSpan.FromSeconds(0.5);
         _view.EndAssistant(heard > readingTime ? heard : readingTime);
     }
 

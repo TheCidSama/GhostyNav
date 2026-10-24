@@ -7,7 +7,11 @@ namespace GhostyNav.Controls;
 public sealed class Ring : FrameworkElement
 {
     public static readonly DependencyProperty ValueProperty = DependencyProperty.Register(
-        nameof(Value), typeof(double), typeof(Ring), new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender));
+        nameof(Value), typeof(double), typeof(Ring), new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender,
+            (d, e) => ((Ring)d).ValueChanged?.Invoke((double)e.NewValue)));
+
+    /// <summary>Raised for every value, animated ones included, so a label can count along with the fill.</summary>
+    public event Action<double>? ValueChanged;
     public static readonly DependencyProperty StrokeProperty = DependencyProperty.Register(
         nameof(Stroke), typeof(Brush), typeof(Ring), new FrameworkPropertyMetadata(Brushes.White, FrameworkPropertyMetadataOptions.AffectsRender));
     public static readonly DependencyProperty TrackProperty = DependencyProperty.Register(

@@ -1,14 +1,33 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using GhostyNav.Services;
 
 namespace GhostyNav.Pages;
 
 /// <summary>A row of the apps list: either a section header or a launchable entry.</summary>
-public sealed class AppRow
+public sealed class AppRow : INotifyPropertyChanged
 {
+    private ImageSource? _icon;
+
+    /// <summary>The app's own icon, once loaded; until then the row shows its first letter.</summary>
+    public ImageSource? Icon
+    {
+        get => _icon;
+        set
+        {
+            _icon = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Icon)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasIcon)));
+        }
+    }
+
+    public bool HasIcon => _icon != null;
+    public event PropertyChangedEventHandler? PropertyChanged;
+
     public string? Header { get; init; }
     public AppEntry? App { get; init; }
     public string Title { get; init; } = "";
@@ -89,10 +108,25 @@ public partial class AppsPage : UserControl, IIslandPage
             rows.Add(new AppRow { Title = $"Search the web for “{q}”", Letter = "\uE774", Category = "Web", IsWeb = true });
         }
 
+        LoadIcons(rows);
         List.ItemsSource = rows;
         List.SelectedItem = rows.FirstOrDefault(r => r.IsItem);
         if (List.SelectedItem != null) List.ScrollIntoView(List.SelectedItem);
         ShowStatus(apps.Count == 0 && !_loading && q.Length == 0 ? "No apps found" : _loading && apps.Count == 0 ? "Loading apps…" : null);
+    }
+
+    /// <summary>Icons already loaded show at once; the rest arrive one by one in list order.</summary>
+    private void LoadIcons(List<AppRow> rows)
+    {
+        int pixels = (int)Math.Round(24 * VisualTreeHelper.GetDpi(this).DpiScaleX);
+        var ui = TaskScheduler.FromCurrentSynchronizationContext();
+        foreach (var row in rows)
+        {
+            if (row.App is not { } app) continue;
+            var load = IconLoader.ForAppAsync(app.Id, pixels);
+            if (IconLoader.Cached(load) is { } icon) row.Icon = icon;
+            else load.ContinueWith(t => row.Icon = t.Result, ui);
+        }
     }
 
     private static void AddSection(List<AppRow> rows, string header, IEnumerable<AppEntry> apps, HashSet<string> starred)

@@ -28,4 +28,7 @@ public interface IIslandHost
     void PasteIntoPreviousApp();
     /// <summary>Keeps the island open while a dialog owned by it is showing.</summary>
     IDisposable HoldOpen();
+    /// <summary>Settings opens from Controls, like a page beneath it, and returns there.</summary>
+    void OpenSettings();
+    void CloseSettings();
 }

@@ -8,7 +8,11 @@ using Microsoft.Win32;
 
 namespace GhostyNav.Services;
 
-public sealed record TopApp(string Name, double Value);
+/// <param name="Pid">One of the app's processes, for finding its icon.</param>
+public sealed record TopApp(string Name, double Value, int Pid);
+
+/// <summary>A live reading during the speed test; <see cref="Final"/> marks the measured result of a phase.</summary>
+public readonly record struct SpeedReading(bool Upload, double Mbps, bool Final);
 
 /// <summary>
 /// System readings for the Stats tab. Sampled only while that tab is visible, using the same
@@ -165,6 +169,7 @@ public sealed class SystemStats : IDisposable
 
             var ram = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
             var cpu = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+            var pids = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             var seen = new Dictionary<int, long>();
 
             byte* p = (byte*)buffer;
@@ -180,6 +185,7 @@ public sealed class SystemStats : IDisposable
                     long privateWs = *(long*)(p + 8);
                     long cpuTime = *(long*)(p + 40) + *(long*)(p + 48);
                     ram[name] = ram.GetValueOrDefault(name) + privateWs;
+                    pids.TryAdd(name, pid);
                     seen[pid] = cpuTime;
                     if (haveDelta && _lastCpuTime.TryGetValue(pid, out long before))
                         cpu[name] = cpu.GetValueOrDefault(name) + Math.Max(0, cpuTime - before) / elapsedTicks * 100;
@@ -194,8 +200,8 @@ public sealed class SystemStats : IDisposable
             _lastProcSample = now;
 
             string[] skip = ["System", "Idle", "Registry", "Memory Compression", "Secure System", "GhostyNav"];
-            TopByRam = Top(ram, skip);
-            if (haveDelta) TopByCpu = Top(cpu, skip);
+            TopByRam = Top(ram, pids, skip);
+            if (haveDelta) TopByCpu = Top(cpu, pids, skip);
         }
         finally
         {
@@ -203,10 +209,10 @@ public sealed class SystemStats : IDisposable
         }
     }
 
-    private static List<TopApp> Top(Dictionary<string, double> values, string[] skip) =>
+    private static List<TopApp> Top(Dictionary<string, double> values, Dictionary<string, int> pids, string[] skip) =>
         values.Where(kv => !skip.Contains(kv.Key, StringComparer.OrdinalIgnoreCase))
               .OrderByDescending(kv => kv.Value).Take(4)
-              .Select(kv => new TopApp(FriendlyName(kv.Key), kv.Value)).ToList();
+              .Select(kv => new TopApp(FriendlyName(kv.Key), kv.Value, pids.GetValueOrDefault(kv.Key))).ToList();
 
     private static string FriendlyName(string exe) => exe.ToLowerInvariant() switch
     {
@@ -282,15 +288,44 @@ public sealed class SystemStats : IDisposable
 
     // ---------- Speed test ----------
 
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
+    private static readonly HttpClient Http = new(new SocketsHttpHandler
+    {
+        // A fixed send buffer: Windows' auto-tuned one can swallow much of the upload at once, which
+        // reads as an impossible speed while the test runs (the final figure was fine either way).
+        ConnectCallback = async (context, ct) =>
+        {
+            var socket = new System.Net.Sockets.Socket(System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp)
+            {
+                NoDelay = true,
+                SendBufferSize = 1 << 20
+            };
+            try
+            {
+                await socket.ConnectAsync(context.DnsEndPoint, ct);
+                return new System.Net.Sockets.NetworkStream(socket, ownsSocket: true);
+            }
+            catch
+            {
+                socket.Dispose();
+                throw;
+            }
+        }
+    })
+    {
+        Timeout = TimeSpan.FromSeconds(30)
+    };
 
-    /// <summary>Downloads then uploads test data against Cloudflare's public speed endpoints.</summary>
-    public static async Task<SpeedResult> RunSpeedTestAsync(CancellationToken ct = default)
+    /// <summary>
+    /// Downloads then uploads test data against Cloudflare's public speed endpoints, reporting the
+    /// speed so far every ~120 ms so it can be shown as it's measured.
+    /// </summary>
+    public static async Task<SpeedResult> RunSpeedTestAsync(IProgress<SpeedReading>? progress = null, CancellationToken ct = default)
     {
         var result = new SpeedResult { When = DateTime.Now };
 
         var sw = Stopwatch.StartNew();
         long received = 0;
+        var reported = TimeSpan.Zero;
         using (var response = await Http.GetAsync("https://speed.cloudflare.com/__down?bytes=25000000",
                    HttpCompletionOption.ResponseHeadersRead, ct))
         {
@@ -301,17 +336,59 @@ public sealed class SystemStats : IDisposable
             int n;
             // Stop after ~8 s on slow links; the rate so far is good enough.
             while ((n = await stream.ReadAsync(buffer, ct)) > 0 && sw.Elapsed.TotalSeconds < 8)
+            {
                 received += n;
+                if (sw.Elapsed - reported < TimeSpan.FromMilliseconds(120)) continue;
+                reported = sw.Elapsed;
+                progress?.Report(new SpeedReading(false, Mbps(received, sw.Elapsed), false));
+            }
         }
-        result.DownMbps = received * 8 / sw.Elapsed.TotalSeconds / 1_000_000;
+        result.DownMbps = Mbps(received, sw.Elapsed);
+        progress?.Report(new SpeedReading(false, result.DownMbps, true));
 
         var payload = new byte[8_000_000];
         sw.Restart();
-        using (var content = new ByteArrayContent(payload))
+        reported = TimeSpan.Zero;
+        // Live upload speed over the last 0.4 s, from 0.65 s in: the first moment only fills the send buffer.
+        var window = new Queue<(TimeSpan At, long Sent)>();
+        using (var content = new ProgressContent(payload, sent =>
+               {
+                   var now = sw.Elapsed;
+                   window.Enqueue((now, sent));
+                   while (window.Count > 1 && now - window.Peek().At > TimeSpan.FromMilliseconds(400)) window.Dequeue();
+                   if (now < TimeSpan.FromMilliseconds(650) || now - reported < TimeSpan.FromMilliseconds(120)) return;
+                   reported = now;
+                   var (at, before) = window.Peek();
+                   progress?.Report(new SpeedReading(true, Mbps(sent - before, now - at), false));
+               }))
         using (var response = await Http.PostAsync("https://speed.cloudflare.com/__up", content, ct))
             response.EnsureSuccessStatusCode();
-        result.UpMbps = payload.Length * 8 / sw.Elapsed.TotalSeconds / 1_000_000;
+        result.UpMbps = Mbps(payload.Length, sw.Elapsed);
+        progress?.Report(new SpeedReading(true, result.UpMbps, true));
         return result;
+
+        static double Mbps(long bytes, TimeSpan elapsed) =>
+            elapsed.TotalSeconds > 0 ? bytes * 8 / elapsed.TotalSeconds / 1_000_000 : 0;
+    }
+
+    /// <summary>A request body sent in chunks, reporting how much has gone out so far.</summary>
+    private sealed class ProgressContent(byte[] data, Action<long> sent) : HttpContent
+    {
+        protected override async Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context)
+        {
+            const int chunk = 64 * 1024;
+            for (int offset = 0; offset < data.Length; offset += chunk)
+            {
+                await stream.WriteAsync(data.AsMemory(offset, Math.Min(chunk, data.Length - offset)));
+                sent(Math.Min(offset + chunk, data.Length));
+            }
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = data.Length;
+            return true;
+        }
     }
 
     public static string FormatBytes(double bytes, int decimals = 1)

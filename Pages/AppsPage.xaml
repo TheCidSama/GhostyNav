@@ -12,8 +12,13 @@
                 <DockPanel Visibility="{Binding IsItem, Converter={StaticResource Vis}}" Height="24">
                     <Border x:Name="Avatar" DockPanel.Dock="Left" Width="24" Height="24" CornerRadius="7" Background="#242428"
                             Margin="0,0,10,0">
-                        <TextBlock x:Name="Letter" Text="{Binding Letter}" FontSize="11" FontWeight="Bold"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <Grid>
+                            <!-- The letter stands in until the app's icon has loaded (or if it has none) -->
+                            <TextBlock x:Name="Letter" Text="{Binding Letter}" FontSize="11" FontWeight="Bold"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <Image x:Name="Icon" Source="{Binding Icon}" Width="24" Height="24" Visibility="Collapsed"
+                                   RenderOptions.BitmapScalingMode="HighQuality" />
+                        </Grid>
                     </Border>
                     <Button x:Name="Star" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="22" Height="22"
                             FontSize="11" Content="{Binding StarGlyph}" Foreground="{StaticResource AccentBrush}"
@@ -41,6 +46,12 @@
                     <Setter TargetName="Avatar" Property="Background" Value="{StaticResource AccentBrush}" />
                     <Setter TargetName="Letter" Property="Foreground" Value="{StaticResource OnAccentBrush}" />
                     <Setter TargetName="Hint" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <!-- Last, so a real icon sits on no tile even in the selected row -->
+                <DataTrigger Binding="{Binding HasIcon}" Value="True">
+                    <Setter TargetName="Avatar" Property="Background" Value="Transparent" />
+                    <Setter TargetName="Letter" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="Icon" Property="Visibility" Value="Visible" />
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>

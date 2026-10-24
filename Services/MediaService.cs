@@ -38,6 +38,8 @@ public sealed class MediaService
     public string AppName { get; private set; } = "";
     public BitmapSource? Art { get; private set; }
     public Color Accent { get; private set; } = Colors.White;
+    /// <summary>The cover reduced to a tiny colour grid, for a soft halo when stretched (null without a cover).</summary>
+    public BitmapSource? ArtGlow { get; private set; }
     public TimeSpan Duration { get; private set; }
     public bool CanSeek { get; private set; }
 
@@ -161,6 +163,7 @@ public sealed class MediaService
                 IsPlaying = false;
                 Title = Artist = AppName = "";
                 Art = null;
+                ArtGlow = null;
                 _artKey = "";
                 Changed?.Invoke();
                 return;
@@ -192,6 +195,7 @@ public sealed class MediaService
                 _artKey = key;
                 Art = props?.Thumbnail != null ? await LoadArtAsync(props.Thumbnail) : null;
                 Accent = Art != null ? DominantColor(Art) : Colors.White;
+                ArtGlow = Art != null ? GlowFrom(Art) : null;
                 if (hadTrack && Title.Length > 0) trackChanged = true;
             }
         }
@@ -227,6 +231,35 @@ public sealed class MediaService
         {
             return null; // Art is optional; a broken thumbnail just shows the placeholder.
         }
+    }
+
+    /// <summary>
+    /// A 6×5 version of the cover with livelier colours, kept within a band of brightness so the
+    /// halo is never black or glaring. Stretched with smooth scaling it becomes a soft gradient.
+    /// </summary>
+    private static BitmapSource GlowFrom(BitmapSource art)
+    {
+        var small = new FormatConvertedBitmap(new TransformedBitmap(art,
+            new ScaleTransform(6.0 / art.PixelWidth, 5.0 / art.PixelHeight)), PixelFormats.Bgra32, null, 0);
+        int w = small.PixelWidth, h = small.PixelHeight;
+        var px = new byte[w * h * 4];
+        small.CopyPixels(px, w * 4, 0);
+        for (int i = 0; i < px.Length; i += 4)
+        {
+            double b = px[i], g = px[i + 1], r = px[i + 2];
+            double grey = (r + g + b) / 3;
+            // Away from grey: a little more saturated than the cover itself.
+            r = grey + (r - grey) * 1.35; g = grey + (g - grey) * 1.35; b = grey + (b - grey) * 1.35;
+            double max = Math.Max(1, Math.Max(r, Math.Max(g, b)));
+            double scale = Math.Clamp(max, 90, 200) / max;
+            px[i] = (byte)Math.Clamp(b * scale, 0, 255);
+            px[i + 1] = (byte)Math.Clamp(g * scale, 0, 255);
+            px[i + 2] = (byte)Math.Clamp(r * scale, 0, 255);
+            px[i + 3] = 255;
+        }
+        var glow = BitmapSource.Create(w, h, 96, 96, PixelFormats.Bgra32, null, px, w * 4);
+        glow.Freeze();
+        return glow;
     }
 
     /// <summary>Average colour weighted towards saturated pixels, so dark/grey borders don't win.</summary>

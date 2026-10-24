@@ -54,8 +54,9 @@ public partial class PowerPage : UserControl, IIslandPage
         Disarm();
         _armed = button;
         label.Text = prompt;
-        button.Background = (Brush)FindResource("AccentBrush");
-        button.Foreground = (Brush)FindResource("OnAccentBrush");
+        // A dark warning red rather than a bright fill: clear, without glaring.
+        button.Background = new SolidColorBrush(Color.FromRgb(0x32, 0x14, 0x14));
+        button.Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0x9C, 0x92));
         _disarm.Start();
         return false;
     }

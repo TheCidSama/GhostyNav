@@ -88,13 +88,13 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
         // Pages are built on first visit, so unused tabs cost no memory.
         _tabs =
         [
-            ("Controls", () => new ControlsPage(_audio, _radios, _media)),
+            ("Controls", () => new ControlsPage(_audio, _radios, _media, this)),
             ("Today", () => new TodayPage(_timer, _settings, this)),
             ("Stats", () => new StatsPage(_settings, this)),
             ("Clipboard", () => new ClipboardPage(_clipboard, this)),
             ("Apps", () => new AppsPage(_settings, this)),
             ("Power", () => new PowerPage(this)),
-            ("Settings", () => new SettingsPage(_settings, _routines)),
+            ("Settings", () => new SettingsPage(_settings, _routines, this)),
         ];
         _pages = new IIslandPage?[_tabs.Length];
         _tabButtons = BuildTabs();
@@ -206,7 +206,10 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
 
     // ---------- Shape animation ----------
 
-    private void UpdateTargets()
+    /// <param name="settle">
+    /// Resize without overshoot, for switching tabs: a bounce there reads as a wobble.
+    /// </param>
+    private void UpdateTargets(bool settle = false)
     {
         double w, h, r, slant = 0;
         switch (_mode)
@@ -231,8 +234,9 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
                 break;
         }
 
-        // Opening gets a little bounce; closing settles without overshoot.
-        double damping = _mode == Mode.Compact ? 34 : 26;
+        // Opening gets a little bounce; closing and tab switches settle without overshoot
+        // (39 is critical damping for the springs' stiffness of 380).
+        double damping = settle ? 40 : _mode == Mode.Compact ? 34 : 26;
         foreach (var s in new[] { _width, _height, _radius, _slant }) s.Damping = damping;
 
         _width.Target = w;
@@ -439,7 +443,8 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
             Expanded.IsHitTestVisible = false;
             Fade(Expanded, 0, 110, completed: () =>
             {
-                if (_mode != Mode.Expanded) Expanded.Visibility = Visibility.Collapsed; // no layout/render cost while compact
+                // Hidden, not Collapsed: it costs nothing while hidden, and re-opening needs no fresh layout.
+                if (_mode != Mode.Expanded) Expanded.Visibility = Visibility.Hidden;
             });
             var shrink = new DoubleAnimation(0.94, TimeSpan.FromMilliseconds(150));
             ExpandedScale.BeginAnimation(ScaleTransform.ScaleXProperty, shrink);
@@ -594,24 +599,35 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
 
     // ---------- Tabs ----------
 
+    /// <summary>Tab buttons for every tab but Settings, which opens from the gear in Controls.</summary>
     private RadioButton[] BuildTabs()
     {
-        var buttons = new RadioButton[_tabs.Length];
-        for (int i = 0; i < _tabs.Length; i++)
+        var buttons = new RadioButton[SettingsTab];
+        for (int i = 0; i < SettingsTab; i++)
         {
             int index = i;
             var button = new RadioButton { Style = (Style)FindResource("TabButton"), Content = _tabs[i].Title, GroupName = "IslandTabs" };
-            if (i == SettingsTab)
-            {
-                // A gear rather than a word keeps the tab bar narrow enough for the smaller panels.
-                button.Content = new TextBlock { Text = "\uE713", Style = (Style)FindResource("Icon"), FontSize = 12.5, Margin = new Thickness(0, 1, 0, 1) };
-                button.ToolTip = _tabs[i].Title;
-            }
             button.Click += (_, _) => SelectTab(index);
             buttons[i] = button;
             Tabs.Children.Add(button);
         }
         return buttons;
+    }
+
+    /// <summary>Where a tab sits in the tab bar: Settings counts as part of Controls.</summary>
+    private static int Position(int tab) => tab == SettingsTab ? ControlsTab : tab;
+
+    /// <summary>The next or previous tab in the tab bar (from Settings, back means Controls).</summary>
+    private void StepTab(int direction) => SelectTab(Math.Clamp(Position(_tab) + direction, 0, SettingsTab - 1));
+
+    public void OpenSettings()
+    {
+        if (_mode == Mode.Expanded) SelectTab(SettingsTab);
+    }
+
+    public void CloseSettings()
+    {
+        if (_mode == Mode.Expanded) SelectTab(ControlsTab);
     }
 
     private FrameworkElement EnsurePage(int index)
@@ -633,7 +649,7 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
                 element.Height = page.PreferredSize.Height;
                 if (_mode != Mode.Expanded || _tab != index) return;
                 SizeIslandTo(index);
-                UpdateTargets();
+                UpdateTargets(settle: true);
             };
         }
         return element;
@@ -659,10 +675,11 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
             shift.X = 0;
             element.BeginAnimation(OpacityProperty, null);
             element.Opacity = 1;
-            element.Visibility = element == current ? Visibility.Visible : Visibility.Collapsed;
+            // Other tabs are Hidden rather than Collapsed: they keep their layout, so switching back is instant.
+            element.Visibility = element == current ? Visibility.Visible : Visibility.Hidden;
         }
         _tab = index;
-        _tabButtons[index].IsChecked = true;
+        _tabButtons[Position(index)].IsChecked = true;
         SizeIslandTo(index);
         _pages[index]!.OnShow();
     }
@@ -677,35 +694,41 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
             return;
         }
 
-        int dir = index > _tab ? 1 : -1;
+        // Left or right as in the tab bar; Settings slides in from the right of Controls and back out.
+        int dir = Position(index) != Position(_tab) ? Math.Sign(Position(index) - Position(_tab))
+            : index == SettingsTab ? 1 : -1;
         int oldIndex = _tab;
         var old = (FrameworkElement)_pages[oldIndex]!;
         _pages[oldIndex]!.OnHide();
 
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        // The old page carries on the way it was going (after a swipe, from where the finger left it).
         var oldShift = (TranslateTransform)old.RenderTransform;
         oldShift.BeginAnimation(TranslateTransform.XProperty,
-            new DoubleAnimation(-dir * 60, TimeSpan.FromMilliseconds(180)) { EasingFunction = ease });
-        var fadeOut = new DoubleAnimation(0, TimeSpan.FromMilliseconds(110));
+            new DoubleAnimation(oldShift.X - dir * 60, TimeSpan.FromMilliseconds(180)) { EasingFunction = ease });
+        var fadeOut = new DoubleAnimation(0, TimeSpan.FromMilliseconds(120));
         fadeOut.Completed += (_, _) =>
         {
-            if (_tab != oldIndex) old.Visibility = Visibility.Collapsed;
+            if (_tab != oldIndex) old.Visibility = Visibility.Hidden;
         };
         old.BeginAnimation(OpacityProperty, fadeOut);
 
         var current = EnsurePage(index);
         _tab = index;
-        _tabButtons[index].IsChecked = true;
+        _tabButtons[Position(index)].IsChecked = true;
         SizeIslandTo(index);
 
+        // A page still fading out from a moment ago comes back from where it is, without a jump.
+        bool midway = current.IsVisible;
+        var shift = (TranslateTransform)current.RenderTransform;
         current.Visibility = Visibility.Visible;
-        ((TranslateTransform)current.RenderTransform).BeginAnimation(TranslateTransform.XProperty,
-            new DoubleAnimation(dir * 60, 0, TimeSpan.FromMilliseconds(320)) { EasingFunction = ease });
+        shift.BeginAnimation(TranslateTransform.XProperty,
+            new DoubleAnimation(midway ? shift.X : dir * 60, 0, TimeSpan.FromMilliseconds(320)) { EasingFunction = ease });
         current.BeginAnimation(OpacityProperty,
-            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)) { BeginTime = TimeSpan.FromMilliseconds(40) });
+            new DoubleAnimation(midway ? current.Opacity : 0, 1, TimeSpan.FromMilliseconds(200)) { BeginTime = TimeSpan.FromMilliseconds(midway ? 0 : 40) });
 
         _pages[index]!.OnShow();
-        UpdateTargets();
+        UpdateTargets(settle: true);
     }
 
     private static void SlideHome(FrameworkElement page)
@@ -720,7 +743,7 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
         long now = Environment.TickCount64;
         if (now - _lastWheel < 350) return;
         _lastWheel = now;
-        SelectTab(_tab + direction);
+        StepTab(direction);
     }
 
     private void OnPreviewKey(object sender, KeyEventArgs e)
@@ -738,7 +761,7 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
         }
         else if (ctrl && e.Key == Key.Tab)
         {
-            SelectTab(_tab + (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? -1 : 1));
+            StepTab(Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? -1 : 1);
             e.Handled = true;
         }
         else if (ctrl && e.Key >= Key.D1 && e.Key < Key.D1 + _tabs.Length)
@@ -752,8 +775,8 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
     {
         // Arrow keys switch tabs unless a text field wants them.
         if (e.Handled || Keyboard.FocusedElement is TextBox) return;
-        if (e.Key == Key.Left) SelectTab(_tab - 1);
-        else if (e.Key == Key.Right) SelectTab(_tab + 1);
+        if (e.Key == Key.Left) StepTab(-1);
+        else if (e.Key == Key.Right) StepTab(1);
     }
 
     // ---------- Swiping between tabs ----------
@@ -798,7 +821,7 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
         _lastDragX = p.X;
 
         // Rubber-band past the first and last tab.
-        bool atEdge = _tab == 0 && dx > 0 || _tab == _tabs.Length - 1 && dx < 0;
+        bool atEdge = _tab == ControlsTab && dx > 0 || Position(_tab) == SettingsTab - 1 && dx < 0;
         shift.X = atEdge ? dx / 3 : dx;
         e.Handled = true;
     }
@@ -813,8 +836,8 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
 
         double dx = shift.X;
         bool flick = Math.Abs(_dragVelocity) > 600 && Math.Abs(dx) > 15;
-        if ((dx < -70 || flick && dx < 0) && _tab < _tabs.Length - 1) SelectTab(_tab + 1);
-        else if ((dx > 70 || flick && dx > 0) && _tab > 0) SelectTab(_tab - 1);
+        if ((dx < -70 || flick && dx < 0) && Position(_tab) < SettingsTab - 1) StepTab(1);
+        else if ((dx > 70 || flick && dx > 0) && _tab != ControlsTab) StepTab(-1);
         else SlideHome((FrameworkElement)_pages[_tab]!);
     }
 

@@ -49,7 +49,12 @@
                 </ToggleButton>
             </UniformGrid>
 
-            <UniformGrid Columns="2" Height="46" Margin="0,8,0,0">
+            <Grid Height="46" Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
                 <ToggleButton x:Name="NightTile" Style="{StaticResource Tile}" Margin="0,0,4,0" Click="OnNightClick">
                     <DockPanel>
                         <Button DockPanel.Dock="Right" Style="{StaticResource TileChevron}" Content="&#xE70D;"
@@ -66,7 +71,7 @@
                     </DockPanel>
                 </ToggleButton>
 
-                <ToggleButton x:Name="DarkTile" Style="{StaticResource Tile}" Margin="4,0,0,0" Click="OnDarkClick">
+                <ToggleButton x:Name="DarkTile" Grid.Column="1" Style="{StaticResource Tile}" Margin="4,0" Click="OnDarkClick">
                     <DockPanel>
                         <Grid Width="28" Height="28" Margin="0,0,8,0">
                             <Ellipse Fill="#000000" Opacity="0.12" />
@@ -78,7 +83,61 @@
                         </StackPanel>
                     </DockPanel>
                 </ToggleButton>
-            </UniformGrid>
+
+                <!-- Settings: a square tile at the end of the row -->
+                <Button x:Name="SettingsTile" Grid.Column="2" Width="46" Margin="4,0,0,0" Click="OnSettings"
+                        ToolTip="Settings" Cursor="Hand" Focusable="False">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bg" Background="{StaticResource CardBrush}" CornerRadius="14" RenderTransformOrigin="0.5,0.5">
+                                <TextBlock x:Name="Gear" Style="{StaticResource Icon}" Text="&#xE713;" FontSize="15"
+                                           Foreground="{StaticResource TextBrush}" RenderTransformOrigin="0.5,0.5">
+                                    <TextBlock.RenderTransform>
+                                        <RotateTransform />
+                                    </TextBlock.RenderTransform>
+                                </TextBlock>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bg" Property="Background" Value="{StaticResource CardHoverBrush}" />
+                                    <!-- The gear turns a little under the pointer -->
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="Gear" Storyboard.TargetProperty="RenderTransform.Angle"
+                                                                 To="60" Duration="0:0:0.35">
+                                                    <DoubleAnimation.EasingFunction>
+                                                        <CubicEase EasingMode="EaseOut" />
+                                                    </DoubleAnimation.EasingFunction>
+                                                </DoubleAnimation>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="Gear" Storyboard.TargetProperty="RenderTransform.Angle"
+                                                                 To="0" Duration="0:0:0.35">
+                                                    <DoubleAnimation.EasingFunction>
+                                                        <CubicEase EasingMode="EaseOut" />
+                                                    </DoubleAnimation.EasingFunction>
+                                                </DoubleAnimation>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.ExitActions>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="Bg" Property="RenderTransform">
+                                        <Setter.Value>
+                                            <ScaleTransform ScaleX="0.94" ScaleY="0.94" />
+                                        </Setter.Value>
+                                    </Setter>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+            </Grid>
 
             <!-- Volume: icon and percentage drawn over the slider -->
             <Grid Height="28" Margin="0,8,0,0">
