@@ -42,7 +42,7 @@ public partial class ControlsPage : UserControl, IIslandPage, IResizingPage
             tile.Click += (_, e) =>
             {
                 if (e.Source != tile) return; // the chevron button inside the tile
-                Fx.Ripple(tile, tile.IsChecked == true ? Fx.Orange : grey, Mouse.GetPosition(tile));
+                Fx.Ripple(tile, tile.IsChecked == true ? ((SolidColorBrush)FindResource("AccentBrush")).Color : grey, Mouse.GetPosition(tile));
             };
 
         // Drag anywhere on the bar, not just on a thumb.

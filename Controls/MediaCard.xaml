@@ -64,7 +64,7 @@
                     <Grid x:Name="Seekbar" Grid.Column="1" Height="16" Background="Transparent" c:Swipe.Ignore="True"
                           MouseLeftButtonDown="OnSeekStart" MouseMove="OnSeekMove" MouseLeftButtonUp="OnSeekEnd"
                           LostMouseCapture="OnSeekLost" MouseEnter="OnSeekHover" MouseLeave="OnSeekHover">
-                        <c:WavyProgress x:Name="Progress" Stroke="{StaticResource AccentBrush}" Track="{StaticResource TrackBrush}" />
+                        <c:WavyProgress x:Name="Progress" Stroke="{DynamicResource AccentBrush}" Track="{StaticResource TrackBrush}" />
                         <Ellipse x:Name="Knob" Width="11" Height="11" Fill="#FFFFFF" HorizontalAlignment="Left"
                                  Visibility="Hidden" IsHitTestVisible="False" />
                     </Grid>

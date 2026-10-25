@@ -23,9 +23,27 @@ public sealed record AgentCall(string Name, JsonObject Args)
     public List<string> List(string name) => Args[name] is JsonArray a
         ? a.Select(n => n is JsonValue v && v.TryGetValue(out string? s) ? s : "").Where(s => s.Length > 0).ToList()
         : [];
+
+    public bool? Bool(string name) => Args[name] switch
+    {
+        JsonValue v when v.TryGetValue(out bool b) => b,
+        JsonValue v when v.TryGetValue(out string? s) && bool.TryParse(s, out bool b) => b,
+        _ => null
+    };
+
+    public double? Number(string name) => Args[name] switch
+    {
+        JsonValue v when v.TryGetValue(out double d) => d,
+        JsonValue v when v.TryGetValue(out string? s) && double.TryParse(s, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out double d) => d,
+        _ => null
+    };
 }
 
 public sealed record AgentReply(string Text, IReadOnlyList<AgentCall> Calls);
+
+/// <summary>An earlier exchange, so follow-ups ("and tomorrow?", "copy that") make sense.</summary>
+public sealed record AgentTurn(string User, string Model);
 
 public sealed class AgentException(string message) : Exception(message);
 
@@ -57,10 +75,17 @@ public static class GeminiAgent
           "every 30 minutes remind me to drink water") or scheduled actions ("open Spotify every
           weekday at 9"). Give it a short title. Use the current time below to work out dates.
         - delete_routine: remove a routine, by its id from the routines list below.
+        - media: play, pause, skip or go back in whatever music or video is playing.
+        - volume: set the sound volume, turn it up or down, mute or unmute.
+        - set_setting: turn Wi-Fi, Bluetooth, dark mode or Night Light on or off.
+        - timer: start, pause, resume or cancel the countdown timer, or start a focus (Pomodoro) session.
+        - todo: add, tick off or remove items on the user's to-do list (listed below).
+        - copy_text: put text on the clipboard ("copy that" means your previous answer).
+        - type_text: type text into the app the user is working in ("write that", "type an email saying...").
         You may call several tools for a request with several actions.
 
         Otherwise answer directly in at most three short sentences of plain text, without markdown.
-        Questions about the user's routines are answered from the list below.
+        Questions about the user's routines, to-dos or calendar are answered from the lists below.
         If you call a tool, don't add any text.
         """;
 
@@ -77,8 +102,51 @@ public static class GeminiAgent
                 ("url", "Full URL, including https://.")),
             CreateRoutine,
             Function("delete_routine", "Delete one of the user's routines.",
-                ("id", "The routine's id, from the routines list.")))
+                ("id", "The routine's id, from the routines list.")),
+            Tool("media", "Control the music or video that is playing.",
+                [("action", Choice("What to do.", "play", "pause", "next", "previous"))], "action"),
+            Tool("volume", "Change the system sound volume.",
+                [
+                    ("action", Choice("set needs level; up and down move it by 10.", "set", "up", "down", "mute", "unmute")),
+                    ("level", new JsonObject { ["type"] = "integer", ["description"] = "For set: 0 to 100." })
+                ], "action"),
+            Tool("set_setting", "Turn a Windows setting on or off.",
+                [
+                    ("setting", Choice("Which setting.", "wifi", "bluetooth", "dark_mode", "night_light")),
+                    ("on", new JsonObject { ["type"] = "boolean", ["description"] = "true to turn it on, false to turn it off." })
+                ], "setting", "on"),
+            Tool("timer", "Control the countdown timer.",
+                [
+                    ("action", Choice("start needs minutes; focus starts 25-minute focus rounds with breaks.",
+                        "start", "pause", "resume", "cancel", "focus")),
+                    ("minutes", new JsonObject { ["type"] = "number", ["description"] = "For start: length in minutes (0.5 for 30 seconds)." })
+                ], "action"),
+            Tool("todo", "Change the to-do list.",
+                [
+                    ("action", Choice("What to do.", "add", "done", "remove")),
+                    ("text", Text("For add: the to-do. For done and remove: the item, as written in the list."))
+                ], "action", "text"),
+            Function("copy_text", "Copy text to the clipboard.", ("text", "The exact text to copy.")),
+            Function("type_text", "Type text into the app the user is working in, as if typed on the keyboard.",
+                ("text", "The exact text to type.")))
     });
+
+    private static JsonObject Tool(string name, string description, (string Name, JsonObject Schema)[] parameters, params string[] required)
+    {
+        var properties = new JsonObject();
+        foreach (var (key, schema) in parameters) properties[key] = schema;
+        return new JsonObject
+        {
+            ["name"] = name,
+            ["description"] = description,
+            ["parameters"] = new JsonObject
+            {
+                ["type"] = "object",
+                ["properties"] = properties,
+                ["required"] = new JsonArray(required.Select(r => (JsonNode)r).ToArray())
+            }
+        };
+    }
 
     private static JsonObject CreateRoutine => new()
     {
@@ -136,10 +204,18 @@ public static class GeminiAgent
     };
 
     /// <param name="images">JPEG crops of regions the user circled, oldest first.</param>
-    /// <param name="context">Facts for this request: the current time, the user's routines.</param>
+    /// <param name="context">Facts for this request: the current time, the user's routines and to-dos.</param>
+    /// <param name="history">The last few exchanges, oldest first.</param>
     public static async Task<AgentReply> AskAsync(string apiKey, string transcript, IReadOnlyList<byte[]> images,
-        IReadOnlyCollection<string> installedApps, string context, CancellationToken ct = default)
+        IReadOnlyCollection<string> installedApps, string context, IReadOnlyList<AgentTurn> history,
+        CancellationToken ct = default)
     {
+        var contents = new JsonArray();
+        foreach (var turn in history)
+        {
+            contents.Add(new JsonObject { ["role"] = "user", ["parts"] = new JsonArray(new JsonObject { ["text"] = turn.User }) });
+            contents.Add(new JsonObject { ["role"] = "model", ["parts"] = new JsonArray(new JsonObject { ["text"] = turn.Model }) });
+        }
         var parts = new JsonArray();
         foreach (var image in images)
             parts.Add(new JsonObject
@@ -148,6 +224,7 @@ public static class GeminiAgent
             });
         string said = transcript.Trim();
         parts.Add(new JsonObject { ["text"] = images.Count > 0 ? $"(Circled {images.Count} region(s) on screen.) {said}" : said });
+        contents.Add(new JsonObject { ["role"] = "user", ["parts"] = parts });
 
         var request = new JsonObject
         {
@@ -158,7 +235,7 @@ public static class GeminiAgent
                     ["text"] = Instructions + "\n" + context + "\nInstalled apps: " + string.Join(", ", installedApps)
                 })
             },
-            ["contents"] = new JsonArray(new JsonObject { ["role"] = "user", ["parts"] = parts }),
+            ["contents"] = contents,
             ["tools"] = Tools.DeepClone(),
             // "minimal" is the lowest level these models accept (a zero budget is rejected) and
             // in practice spends no thinking tokens at all, which keeps replies fast.

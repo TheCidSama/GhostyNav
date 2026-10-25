@@ -46,7 +46,7 @@
                 <Border Style="{StaticResource Card}" Margin="0,0,4,0" Padding="8,10">
                     <StackPanel>
                         <Grid Width="62" Height="62">
-                            <c:Ring x:Name="CpuRing" Thickness="6" Stroke="{StaticResource AccentBrush}" />
+                            <c:Ring x:Name="CpuRing" Thickness="6" Stroke="{DynamicResource AccentBrush}" />
                             <TextBlock x:Name="CpuText" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Grid>
                         <TextBlock Text="CPU" Style="{StaticResource GaugeTitle}" />
@@ -118,7 +118,7 @@
                 <DockPanel>
                     <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4">
                         <Button x:Name="TopToggle" DockPanel.Dock="Right" Style="{StaticResource FlatButton}" Height="18"
-                                Padding="6,0" Background="Transparent" Foreground="{StaticResource AccentBrush}" FontSize="9.5"
+                                Padding="6,0" Background="Transparent" Foreground="{DynamicResource AccentBrush}" FontSize="9.5"
                                 Click="OnToggleTop" />
                         <TextBlock x:Name="TopTitle" FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center" />
                     </DockPanel>

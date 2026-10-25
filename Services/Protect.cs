@@ -10,8 +10,23 @@ namespace GhostyNav.Services;
 /// </summary>
 public static class Protect
 {
-    public static byte[] Encrypt(string plain, string purpose) =>
-        ProtectedData.Protect(Encoding.UTF8.GetBytes(plain), Entropy(purpose), DataProtectionScope.CurrentUser);
+    public static byte[] Encrypt(string plain, string purpose) => EncryptBytes(Encoding.UTF8.GetBytes(plain), purpose);
+
+    public static byte[] EncryptBytes(byte[] plain, string purpose) =>
+        ProtectedData.Protect(plain, Entropy(purpose), DataProtectionScope.CurrentUser);
+
+    /// <returns>null when the data is damaged or was encrypted by another account or PC.</returns>
+    public static byte[]? DecryptBytes(byte[] blob, string purpose)
+    {
+        try
+        {
+            return ProtectedData.Unprotect(blob, Entropy(purpose), DataProtectionScope.CurrentUser);
+        }
+        catch (CryptographicException)
+        {
+            return null;
+        }
+    }
 
     /// <returns>null when the data is missing, damaged, or was encrypted by another account or PC.</returns>
     public static string? Decrypt(byte[]? blob, string purpose)

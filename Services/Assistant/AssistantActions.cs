@@ -8,9 +8,206 @@ namespace GhostyNav.Services.Assistant;
 /// <summary>What an action did, for the result line under the transcript.</summary>
 public sealed record ActionResult(string Glyph, string Text, bool Ok = true);
 
+/// <summary>Everything the assistant's tools can reach.</summary>
+public sealed record ActionContext(
+    MediaService Media,
+    AudioService Audio,
+    RadioService Radios,
+    TimerService Timer,
+    AppSettings Settings,
+    RoutineScheduler Routines,
+    Action<string> TypeText); // types into the app the user was working in
+
 /// <summary>Carries out the tool calls the agent asks for.</summary>
 public static class AssistantActions
 {
+    private const int MaxTypedChars = 4000;
+
+    /// <summary>Tools that act on what the model read: asked about first when the request came with circled areas.</summary>
+    public static bool NeedsConfirmation(AgentCall call) => call.Name is "open_website" or "type_text";
+
+    /// <summary>What a confirmation asks, e.g. "Open example.com?".</summary>
+    public static string Describe(AgentCall call) => call.Name switch
+    {
+        "open_website" => $"Open {(Uri.TryCreate(WithScheme(call.Arg("url")), UriKind.Absolute, out var u) ? u.Host : call.Arg("url"))}?",
+        "type_text" => $"Type “{Shorten(call.Arg("text"), 60)}”?",
+        _ => $"{call.Name}?"
+    };
+
+    public static async Task<ActionResult> RunAsync(AgentCall call, ActionContext context)
+    {
+        try
+        {
+            switch (call.Name)
+            {
+                case "media": return await MediaAsync(call, context.Media);
+                case "volume": return Volume(call, context.Audio);
+                case "set_setting": return await SettingAsync(call, context.Radios);
+                case "timer": return Timer(call, context.Timer);
+                case "todo": return Todo(call, context.Settings);
+                case "copy_text": return Copy(call.Arg("text"));
+                case "type_text":
+                    string text = call.Arg("text");
+                    if (text.Length == 0) return new ActionResult("\uE7BA", "There was nothing to type", Ok: false);
+                    if (text.Length > MaxTypedChars) text = text[..MaxTypedChars];
+                    context.TypeText(text);
+                    return new ActionResult("\uE765", $"Typed “{Shorten(text, 40)}”");
+                default: return Run(call, context.Routines);
+            }
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            Debug.WriteLine($"{call.Name} failed: {ex.Message}");
+            return new ActionResult("\uE7BA", "That didn't work", Ok: false);
+        }
+    }
+
+    private static async Task<ActionResult> MediaAsync(AgentCall call, MediaService media)
+    {
+        if (!media.HasSession) return new ActionResult("\uE7BA", "Nothing is playing", Ok: false);
+        string action = call.Arg("action");
+        switch (action)
+        {
+            case "play" or "pause":
+                if (media.IsPlaying != (action == "play")) await media.PlayPauseAsync();
+                return new ActionResult(action == "play" ? "\uE768" : "\uE769", action == "play" ? $"Playing {media.Title}" : "Paused");
+            case "next":
+                await media.NextAsync();
+                return new ActionResult("\uE893", "Skipped to the next track");
+            case "previous":
+                await media.PreviousAsync();
+                return new ActionResult("\uE892", "Back to the previous track");
+            default:
+                return new ActionResult("\uE7BA", "I can't do that with the music", Ok: false);
+        }
+    }
+
+    private static ActionResult Volume(AgentCall call, AudioService audio)
+    {
+        audio.Refresh();
+        if (!audio.IsAvailable) return new ActionResult("\uE7BA", "There's no sound output", Ok: false);
+        switch (call.Arg("action"))
+        {
+            case "mute":
+                audio.IsMuted = true;
+                return new ActionResult("\uE74F", "Muted");
+            case "unmute":
+                audio.IsMuted = false;
+                return new ActionResult("\uE767", $"Unmuted, at {Math.Round(audio.Volume)}%");
+        }
+        double? target = call.Arg("action") switch
+        {
+            "up" => Math.Min(100, audio.Volume + 10),
+            "down" => Math.Max(0, audio.Volume - 10),
+            _ => call.Int("level")
+        };
+        if (target is not double level || level < 0) return new ActionResult("\uE7BA", "What level?", Ok: false);
+        audio.Volume = Math.Min(level, 100);
+        if (audio.IsMuted && level > 0) audio.IsMuted = false;
+        return new ActionResult("\uE767", $"Volume {Math.Round(audio.Volume)}%");
+    }
+
+    private static async Task<ActionResult> SettingAsync(AgentCall call, RadioService radios)
+    {
+        if (call.Bool("on") is not bool on) return new ActionResult("\uE7BA", "On or off?", Ok: false);
+        string state = on ? "on" : "off";
+        switch (call.Arg("setting"))
+        {
+            case "wifi":
+                if (!radios.HasWifi) return new ActionResult("\uE7BA", "This PC has no Wi-Fi", Ok: false);
+                await radios.SetWifiAsync(on);
+                return new ActionResult("\uE701", $"Wi-Fi {state}");
+            case "bluetooth":
+                if (!radios.HasBluetooth) return new ActionResult("\uE7BA", "This PC has no Bluetooth", Ok: false);
+                await radios.SetBluetoothAsync(on);
+                return new ActionResult("\uE702", $"Bluetooth {state}");
+            case "dark_mode":
+                await SystemToggles.SetDarkModeAsync(on);
+                return new ActionResult("\uE708", $"Dark mode {state}");
+            case "night_light":
+                return SystemToggles.SetNightLight(on)
+                    ? new ActionResult("\uE706", $"Night Light {state}")
+                    : new ActionResult("\uE7BA", "Turn Night Light on once in Windows Settings first", Ok: false);
+            default:
+                return new ActionResult("\uE7BA", "I can't change that setting", Ok: false);
+        }
+    }
+
+    private static ActionResult Timer(AgentCall call, TimerService timer)
+    {
+        switch (call.Arg("action"))
+        {
+            case "start":
+                double minutes = call.Number("minutes") ?? 0;
+                if (minutes <= 0) return new ActionResult("\uE7BA", "For how long?", Ok: false);
+                var length = TimeSpan.FromSeconds(Math.Max(1, Math.Round(Math.Min(minutes, 24 * 60) * 60)));
+                timer.SetDuration(length);
+                timer.Start();
+                return new ActionResult("\uE916", $"Timer set for {Describe(length)}");
+            case "focus":
+                timer.StartFocus();
+                return new ActionResult("\uE916", $"Focus for {TimerService.FocusLength.TotalMinutes:0} minutes, then a break");
+            case "pause":
+                if (!timer.IsRunning) return new ActionResult("\uE7BA", "No timer is running", Ok: false);
+                timer.Pause();
+                return new ActionResult("\uE769", $"Timer paused at {TimerService.Format(timer.Remaining)}");
+            case "resume":
+                if (timer.IsRunning || !timer.IsActive) return new ActionResult("\uE7BA", "No timer is paused", Ok: false);
+                timer.Start();
+                return new ActionResult("\uE768", "Timer resumed");
+            case "cancel":
+                if (!timer.IsActive) return new ActionResult("\uE7BA", "No timer is running", Ok: false);
+                timer.Reset();
+                return new ActionResult("\uE711", "Timer cancelled");
+            default:
+                return new ActionResult("\uE7BA", "I can't do that with the timer", Ok: false);
+        }
+    }
+
+    private static string Describe(TimeSpan t) =>
+        t.TotalMinutes >= 1 && t.Seconds == 0 ? $"{t.TotalMinutes:0} minute{(t.TotalMinutes == 1 ? "" : "s")}"
+        : t.TotalMinutes < 1 ? $"{t.TotalSeconds:0} seconds"
+        : TimerService.Format(t);
+
+    private static ActionResult Todo(AgentCall call, AppSettings settings)
+    {
+        string text = call.Arg("text").Trim();
+        if (text.Length == 0) return new ActionResult("\uE7BA", "Which to-do?", Ok: false);
+        if (call.Arg("action") == "add")
+        {
+            if (text.Length > 120) text = text[..120];
+            settings.Todos.Add(new TodoItem { Text = text });
+            settings.Save();
+            return new ActionResult("\uE710", $"Added “{text}” to your to-dos");
+        }
+
+        var item = settings.Todos.FirstOrDefault(t => t.Text.Equals(text, StringComparison.OrdinalIgnoreCase))
+                   ?? settings.Todos.FirstOrDefault(t => t.Text.Contains(text, StringComparison.OrdinalIgnoreCase));
+        if (item == null) return new ActionResult("\uE7BA", $"“{text}” isn't on your to-do list", Ok: false);
+        if (call.Arg("action") == "remove") settings.Todos.Remove(item);
+        else item.Done = true;
+        settings.Save();
+        return call.Arg("action") == "remove"
+            ? new ActionResult("\uE74D", $"Removed “{item.Text}”")
+            : new ActionResult("\uE73E", $"Ticked off “{item.Text}”");
+    }
+
+    private static ActionResult Copy(string text)
+    {
+        if (text.Length == 0) return new ActionResult("\uE7BA", "There was nothing to copy", Ok: false);
+        System.Windows.Clipboard.SetText(text);
+        return new ActionResult("\uE8C8", $"Copied “{Shorten(text, 40)}”");
+    }
+
+    private static string Shorten(string text, int max)
+    {
+        text = text.ReplaceLineEndings(" ").Trim();
+        return text.Length <= max ? text : text[..(max - 1)].TrimEnd() + "…";
+    }
+
+    private static string WithScheme(string url) => url.Contains("://") ? url.Trim() : "https://" + url.Trim();
+
+    /// <summary>Actions that need nothing but the app list and the routines: what routines can run.</summary>
     public static ActionResult Run(AgentCall call, RoutineScheduler routines)
     {
         switch (call.Name)

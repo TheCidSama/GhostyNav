@@ -21,6 +21,10 @@ public static class IconLoader
     public static Task<ImageSource?> ForAppAsync(string appId, int pixels) =>
         Get($"app|{appId}|{pixels}", () => Load(@"shell:AppsFolder\" + appId, pixels));
 
+    /// <summary>A file's icon, or a thumbnail for pictures and videos, as Explorer shows it.</summary>
+    public static Task<ImageSource?> ForFileAsync(string path, int pixels) =>
+        Get($"file|{path}|{pixels}", () => Load(path, pixels, thumbnail: true));
+
     /// <summary>The icon of a running process's program; <paramref name="key"/> groups processes that share one.</summary>
     public static Task<ImageSource?> ForProcessAsync(int pid, string key, int pixels) =>
         Get($"proc|{key}|{pixels}", () => ProcessPath(pid) is { } path ? Load(path, pixels) : null);
@@ -57,14 +61,15 @@ public static class IconLoader
         _thread.Start();
     }
 
-    private static ImageSource? Load(string parsingName, int pixels)
+    private static ImageSource? Load(string parsingName, int pixels, bool thumbnail = false)
     {
         var iid = typeof(IShellItemImageFactory).GUID;
         if (SHCreateItemFromParsingName(parsingName, 0, ref iid, out var factory) != 0 || factory == null) return null;
         try
         {
-            const int SIIGBF_ICONONLY = 0x4;
-            if (factory.GetImage(new SIZE { cx = pixels, cy = pixels }, SIIGBF_ICONONLY, out nint bitmap) != 0) return null;
+            const int SIIGBF_RESIZETOFIT = 0x0, SIIGBF_ICONONLY = 0x4;
+            int flags = thumbnail ? SIIGBF_RESIZETOFIT : SIIGBF_ICONONLY;
+            if (factory.GetImage(new SIZE { cx = pixels, cy = pixels }, flags, out nint bitmap) != 0) return null;
             try { return ToBitmapSource(bitmap); }
             finally { DeleteObject(bitmap); }
         }

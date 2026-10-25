@@ -23,11 +23,14 @@ public sealed class ClipItem
 
 /// <summary>
 /// Clipboard history. Windows notifies us of every change (WM_CLIPBOARDUPDATE); nothing is polled.
-/// Text is kept in clipboard.json, images as PNG files next to it.
+/// Everything is encrypted for the current Windows account (see <see cref="Protect"/>): the list in
+/// clipboard.dat, images as encrypted PNGs in clips\.
 /// </summary>
 public sealed class ClipboardService
 {
     private const int MaxItems = 60;
+    private const string FileName = "clipboard.dat", Purpose = "clipboard", ImagePurpose = "clipboard-image";
+    private const string PlainFileName = "clipboard.json"; // earlier versions, unencrypted
     private static readonly string ImageFolder = Path.Combine(Store.Folder, "clips");
 
     private readonly Dispatcher _ui;
@@ -40,10 +43,52 @@ public sealed class ClipboardService
     public ClipboardService(Dispatcher ui)
     {
         _ui = ui;
-        Items = Store.Load<List<ClipItem>>("clipboard.json");
+        Items = Store.LoadProtected<List<ClipItem>>(FileName, Purpose) ?? [];
+        EncryptPlainHistory();
         // Copy bursts (Office writes many formats one after another) collapse into one read.
         _debounce.Tick += (_, _) => { _debounce.Stop(); Capture(); };
-        _saveTimer.Tick += (_, _) => { _saveTimer.Stop(); Store.Save("clipboard.json", Items); };
+        _saveTimer.Tick += (_, _) => { _saveTimer.Stop(); Store.SaveProtected(FileName, Items, Purpose); };
+    }
+
+    /// <summary>Moves history an earlier version saved in plain files into encrypted ones.</summary>
+    private void EncryptPlainHistory()
+    {
+        string plain = Path.Combine(Store.Folder, PlainFileName);
+        if (File.Exists(plain))
+        {
+            if (Items.Count == 0) Items.AddRange(Store.Load<List<ClipItem>>(PlainFileName));
+            Store.SaveProtected(FileName, Items, Purpose);
+            if (File.Exists(Path.Combine(Store.Folder, FileName))) File.Delete(plain);
+        }
+        bool changed = false;
+        foreach (var item in Items.Where(i => i.ImageFile?.EndsWith(".png", StringComparison.OrdinalIgnoreCase) == true))
+        {
+            string png = Path.Combine(ImageFolder, item.ImageFile!);
+            try
+            {
+                if (File.Exists(png))
+                {
+                    File.WriteAllBytes(Path.Combine(ImageFolder, item.Id + ".bin"), Protect.EncryptBytes(File.ReadAllBytes(png), ImagePurpose));
+                    File.Delete(png);
+                }
+                item.ImageFile = item.Id + ".bin";
+                changed = true;
+            }
+            catch (IOException ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Couldn't encrypt {png}: {ex.Message}");
+            }
+        }
+        if (changed) Store.SaveProtected(FileName, Items, Purpose);
+
+        // Unencrypted leftovers of items removed while their preview was open.
+        if (!Directory.Exists(ImageFolder)) return;
+        var stillPlain = Items.Select(i => i.ImageFile).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var png in Directory.GetFiles(ImageFolder, "*.png").Where(p => !stillPlain.Contains(Path.GetFileName(p))))
+        {
+            try { File.Delete(png); }
+            catch (IOException) { }
+        }
     }
 
     public void OnClipboardUpdate()
@@ -121,12 +166,15 @@ public sealed class ClipboardService
     private void AddImage(BitmapSource image)
     {
         var item = new ClipItem { Kind = ClipKind.Image, Width = image.PixelWidth, Height = image.PixelHeight };
-        item.ImageFile = item.Id + ".png";
+        item.ImageFile = item.Id + ".bin";
         Directory.CreateDirectory(ImageFolder);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(image));
-        using (var file = File.Create(Path.Combine(ImageFolder, item.ImageFile)))
-            encoder.Save(file);
+        using (var png = new MemoryStream())
+        {
+            encoder.Save(png);
+            File.WriteAllBytes(Path.Combine(ImageFolder, item.ImageFile), Protect.EncryptBytes(png.ToArray(), ImagePurpose));
+        }
         Items.Insert(0, item);
         Commit();
     }
@@ -198,11 +246,15 @@ public sealed class ClipboardService
         if (item.ImageFile == null) return null;
         string path = Path.Combine(ImageFolder, item.ImageFile);
         if (!File.Exists(path)) return null;
+        byte[]? png;
+        try { png = Protect.DecryptBytes(File.ReadAllBytes(path), ImagePurpose); }
+        catch (IOException) { return null; }
+        if (png == null) return null;
         var bmp = new BitmapImage();
         bmp.BeginInit();
-        bmp.CacheOption = BitmapCacheOption.OnLoad; // don't keep the file locked
+        bmp.CacheOption = BitmapCacheOption.OnLoad;
         if (decodeWidth > 0) bmp.DecodePixelWidth = decodeWidth;
-        bmp.UriSource = new Uri(path);
+        bmp.StreamSource = new MemoryStream(png);
         bmp.EndInit();
         bmp.Freeze();
         return bmp;

@@ -21,7 +21,7 @@
                         </Grid>
                     </Border>
                     <Button x:Name="Star" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="22" Height="22"
-                            FontSize="11" Content="{Binding StarGlyph}" Foreground="{StaticResource AccentBrush}"
+                            FontSize="11" Content="{Binding StarGlyph}" Foreground="{DynamicResource AccentBrush}"
                             Visibility="Hidden" Click="OnStar" Tag="{Binding}" ToolTip="Star" />
                     <TextBlock DockPanel.Dock="Right" Text="{Binding Category}" FontSize="10" Foreground="{StaticResource SubTextBrush}"
                                VerticalAlignment="Center" Margin="8,0" />
@@ -43,8 +43,8 @@
                     <Setter TargetName="Letter" Property="FontFamily" Value="{StaticResource IconFont}" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
-                    <Setter TargetName="Avatar" Property="Background" Value="{StaticResource AccentBrush}" />
-                    <Setter TargetName="Letter" Property="Foreground" Value="{StaticResource OnAccentBrush}" />
+                    <Setter TargetName="Avatar" Property="Background" Value="{DynamicResource AccentBrush}" />
+                    <Setter TargetName="Letter" Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
                     <Setter TargetName="Hint" Property="Visibility" Value="Visible" />
                 </DataTrigger>
                 <!-- Last, so a real icon sits on no tile even in the selected row -->

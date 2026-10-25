@@ -3,24 +3,34 @@ using System.Windows.Threading;
 
 namespace GhostyNav.Services.Assistant;
 
+/// <summary>The two keys held for push-to-talk.</summary>
+public enum Chord { CtrlAlt, CtrlWin, AltWin }
+
 /// <summary>
-/// Push-to-talk on Ctrl+Alt held by itself. RegisterHotKey can't express a modifier-only chord,
-/// so this watches keys with a low-level hook (observing only; every key still reaches its app).
-/// Holding both for <see cref="HoldDelay"/> without another key raises <see cref="Pressed"/>, so
-/// shortcuts such as Ctrl+Alt+Space or AltGr typing never trigger it.
+/// Push-to-talk on two modifier keys held by themselves (Ctrl+Alt unless chosen otherwise).
+/// RegisterHotKey can't express a modifier-only chord, so this watches keys with a low-level hook
+/// (observing only; every key still reaches its app). Holding both for <see cref="HoldDelay"/>
+/// without another key raises <see cref="Pressed"/>, so shortcuts such as Ctrl+Alt+Space or AltGr
+/// typing never trigger it.
 /// </summary>
 public sealed class KeyChord : IDisposable
 {
+    private enum Key { None, Ctrl, Alt, Win }
+
     private static readonly TimeSpan HoldDelay = TimeSpan.FromMilliseconds(300);
     private const int WH_KEYBOARD_LL = 13, WM_KEYDOWN = 0x100, WM_SYSKEYDOWN = 0x104, WM_QUIT = 0x12;
     private const int VK_LCONTROL = 0xA2, VK_RCONTROL = 0xA3, VK_LMENU = 0xA4, VK_RMENU = 0xA5, VK_CONTROL = 0x11, VK_MENU = 0x12;
+    private const int VK_LWIN = 0x5B, VK_RWIN = 0x5C, VK_MASK = 0xE8; // 0xE8 is unassigned: a key no app reacts to
+    // Marks the key we inject ourselves, so the hook doesn't take it for the user joining a shortcut.
+    private static readonly nint OwnInput = 0x47484F53;
 
     private readonly Dispatcher _ui;
     private readonly DispatcherTimer _arm;
     private readonly Thread _thread;
     private HookProc? _proc; // must outlive the hook
     private uint _threadId;
-    private bool _ctrl, _alt, _spoiled, _active;
+    private bool _first, _second, _spoiled, _active;
+    private Chord _chord;
 
     /// <summary>The chord has been held long enough: start listening.</summary>
     public event Action? Pressed;
@@ -29,23 +39,72 @@ public sealed class KeyChord : IDisposable
     /// <summary>Another key joined the chord after <see cref="Pressed"/> (it was a shortcut after all).</summary>
     public event Action? Cancelled;
 
-    public KeyChord(Dispatcher ui)
+    public KeyChord(Dispatcher ui, Chord chord)
     {
         _ui = ui;
+        _chord = chord;
         _arm = new DispatcherTimer(DispatcherPriority.Input, ui) { Interval = HoldDelay };
         _arm.Tick += (_, _) =>
         {
             _arm.Stop();
-            if (!_ctrl || !_alt || _spoiled) return;
+            if (!_first || !_second || _spoiled) return;
             _active = true;
+            // The Start menu opens when Win is let go on its own; a press of a key that does nothing stops that.
+            if (Uses(Key.Win)) SendMaskKey();
             Pressed?.Invoke();
         };
         _thread = new Thread(HookThread) { IsBackground = true, Name = "KeyChord" };
         _thread.Start();
     }
 
+    public Chord Chord
+    {
+        get => _chord;
+        set
+        {
+            if (value == _chord) return;
+            _chord = value;
+            _arm.Stop();
+            _first = _second = _active = false;
+        }
+    }
+
+    public string Name => NameOf(_chord);
+
+    public static string NameOf(Chord chord) => chord switch
+    {
+        Chord.CtrlWin => "Ctrl+Win",
+        Chord.AltWin => "Alt+Win",
+        _ => "Ctrl+Alt"
+    };
+
+    private (Key First, Key Second) Keys => _chord switch
+    {
+        Chord.CtrlWin => (Key.Ctrl, Key.Win),
+        Chord.AltWin => (Key.Alt, Key.Win),
+        _ => (Key.Ctrl, Key.Alt)
+    };
+
+    private bool Uses(Key key) => Keys.First == key || Keys.Second == key;
+
     /// <summary>True while both keys are physically down; used to recover from missed key-ups.</summary>
-    public static bool IsHeld() => (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0 && (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+    public bool IsHeld() => IsDown(Keys.First) && IsDown(Keys.Second);
+
+    private static bool IsDown(Key key) => key switch
+    {
+        Key.Ctrl => (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0,
+        Key.Alt => (GetAsyncKeyState(VK_MENU) & 0x8000) != 0,
+        Key.Win => (GetAsyncKeyState(VK_LWIN) & 0x8000) != 0 || (GetAsyncKeyState(VK_RWIN) & 0x8000) != 0,
+        _ => false
+    };
+
+    private static Key Classify(int vk) => vk switch
+    {
+        VK_LCONTROL or VK_RCONTROL or VK_CONTROL => Key.Ctrl,
+        VK_LMENU or VK_RMENU or VK_MENU => Key.Alt,
+        VK_LWIN or VK_RWIN => Key.Win,
+        _ => Key.None
+    };
 
     /// <summary>Ends the current hold as if the keys were released (e.g. it was held too long).</summary>
     public void Reset()
@@ -77,7 +136,7 @@ public sealed class KeyChord : IDisposable
             bool down = wParam is WM_KEYDOWN or WM_SYSKEYDOWN;
             // AltGr arrives as a fake left Ctrl (scan code with bit 0x200) plus right Alt: not our chord.
             bool fakeCtrl = info.vkCode == VK_LCONTROL && (info.scanCode & 0x200) != 0;
-            if (!fakeCtrl)
+            if (!fakeCtrl && info.dwExtraInfo != OwnInput)
             {
                 int vk = (int)info.vkCode;
                 // Keep the hook itself instant: the decision happens on the UI thread.
@@ -89,16 +148,16 @@ public sealed class KeyChord : IDisposable
 
     private void OnKey(int vk, bool down)
     {
-        bool isCtrl = vk is VK_LCONTROL or VK_RCONTROL or VK_CONTROL;
-        bool isAlt = vk is VK_LMENU or VK_RMENU or VK_MENU;
+        var key = Classify(vk);
+        var (first, second) = Keys;
 
-        if (isCtrl || isAlt)
+        if (key != Key.None && (key == first || key == second))
         {
-            bool wasChord = _ctrl && _alt;
-            if (isCtrl) _ctrl = down;
-            else _alt = down;
+            bool wasChord = _first && _second;
+            if (key == first) _first = down;
+            else _second = down;
 
-            if (down && !wasChord && _ctrl && _alt)
+            if (down && !wasChord && _first && _second)
             {
                 _spoiled = false;
                 _arm.Start();
@@ -131,6 +190,33 @@ public sealed class KeyChord : IDisposable
         _arm.Stop();
         if (_threadId != 0) PostThreadMessage(_threadId, WM_QUIT, 0, 0);
     }
+
+    private static void SendMaskKey()
+    {
+        INPUT[] inputs =
+        [
+            new() { type = 1, ki = new KEYBDINPUT { wVk = VK_MASK, dwExtraInfo = OwnInput } },
+            new() { type = 1, ki = new KEYBDINPUT { wVk = VK_MASK, dwFlags = 2 /* KEYUP */, dwExtraInfo = OwnInput } }
+        ];
+        SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct KEYBDINPUT
+    {
+        public ushort wVk, wScan;
+        public uint dwFlags, time;
+        public nint dwExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Explicit, Size = 40)]
+    private struct INPUT
+    {
+        [FieldOffset(0)] public uint type;
+        [FieldOffset(8)] public KEYBDINPUT ki;
+    }
+
+    [DllImport("user32.dll")] private static extern uint SendInput(uint count, INPUT[] inputs, int size);
 
     private delegate nint HookProc(int code, nint wParam, nint lParam);
 

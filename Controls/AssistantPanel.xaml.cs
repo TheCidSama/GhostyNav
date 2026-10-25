@@ -73,7 +73,7 @@ public partial class AssistantPanel : UserControl
         ResultArea.Visibility = Visibility.Collapsed;
         UpdateLayoutForTranscript();
         Results.Children.Clear();
-        AnswerScroll.Visibility = Visibility.Collapsed;
+        AnswerScroll.Visibility = CopyButton.Visibility = Visibility.Collapsed;
         StopDots();
     }
 
@@ -114,7 +114,7 @@ public partial class AssistantPanel : UserControl
         Thinking.Visibility = Visibility.Visible;
         ThinkingText.Text = text;
         Results.Children.Clear();
-        AnswerScroll.Visibility = Visibility.Collapsed;
+        AnswerScroll.Visibility = CopyButton.Visibility = Visibility.Collapsed;
         StartDots();
     }
 
@@ -130,6 +130,58 @@ public partial class AssistantPanel : UserControl
         Answer.Text = text;
         AnswerScroll.Visibility = Visibility.Visible;
         AnswerScroll.ScrollToHome();
+        CopyIcon.Text = "\uE8C8";
+        CopyText.Text = "Copy";
+        CopyButton.Visibility = Visibility.Visible;
+    }
+
+    private void OnCopy(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Clipboard.SetText(Answer.Text);
+            CopyIcon.Text = "\uE73E";
+            CopyText.Text = "Copied";
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+            CopyText.Text = "Clipboard busy, try again";
+        }
+    }
+
+    /// <summary>
+    /// Asks the user to allow an action, with Go ahead and Cancel buttons. False when cancelled, when
+    /// nobody answers within <paramref name="timeout"/>, or when the assistant is dismissed.
+    /// </summary>
+    public async Task<bool> ConfirmAsync(string question, string hint, TimeSpan timeout, CancellationToken ct)
+    {
+        PrepareResult(MascotMood.Thinking);
+        Results.Children.Add(ResultRow(new ActionResult("\uE897", question)));
+        Results.Children.Add(Hint(hint));
+
+        var answer = new TaskCompletionSource<bool>();
+        var lavender = (Brush)FindResource("Lavender");
+        var yes = new Button
+        {
+            Style = (Style)FindResource("PrimaryButton"), Content = "Go ahead", Height = 26, Padding = new Thickness(14, 0, 14, 0),
+            FontSize = 11.5, Background = lavender, Foreground = new SolidColorBrush(Color.FromRgb(0x1E, 0x14, 0x3A))
+        };
+        var no = new Button
+        {
+            Style = (Style)FindResource("FlatButton"), Content = "Cancel", Height = 26, Padding = new Thickness(12, 0, 12, 0),
+            FontSize = 11.5, Margin = new Thickness(6, 0, 0, 0)
+        };
+        yes.Click += (_, _) => answer.TrySetResult(true);
+        no.Click += (_, _) => answer.TrySetResult(false);
+        Results.Children.Add(new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Margin = new Thickness(32, 8, 0, 2), Children = { yes, no }
+        });
+
+        using var cancel = ct.Register(() => answer.TrySetResult(false));
+        bool allowed = await Task.WhenAny(answer.Task, Task.Delay(timeout, CancellationToken.None)) == answer.Task && answer.Task.Result;
+        yes.IsEnabled = no.IsEnabled = false;
+        return allowed;
     }
 
     public void ShowError(string text, string? hint = null)
@@ -140,13 +192,13 @@ public partial class AssistantPanel : UserControl
     }
 
     /// <summary>Areas were circled but nothing was said: nothing is sent until the user says what to do.</summary>
-    public void ShowWaiting(int areas)
+    public void ShowWaiting(int areas, string chord)
     {
         PrepareResult(MascotMood.Listening);
         Results.Children.Add(ResultRow(new ActionResult("\uE8B9", areas == 1
             ? "What should I do with it?"
             : "What should I do with them?")));
-        Results.Children.Add(Hint("Hold Ctrl+Alt and tell me. Nothing is sent until you do."));
+        Results.Children.Add(Hint($"Hold {chord} and tell me. Nothing is sent until you do."));
     }
 
     private TextBlock Hint(string text) => new()
@@ -164,7 +216,7 @@ public partial class AssistantPanel : UserControl
         Thinking.Visibility = Visibility.Collapsed;
         ResultArea.Visibility = Visibility.Visible;
         Results.Children.Clear();
-        AnswerScroll.Visibility = Visibility.Collapsed;
+        AnswerScroll.Visibility = CopyButton.Visibility = Visibility.Collapsed;
     }
 
     private UIElement ResultRow(ActionResult result)

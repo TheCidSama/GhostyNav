@@ -13,11 +13,13 @@ namespace GhostyNav.Pages;
 
 public partial class TodayPage : UserControl, IIslandPage
 {
-    private static readonly int[] PresetMinutes = [1, 5, 10, 15, 20];
+    private static readonly int[] PresetMinutes = [5, 10, 15, 20];
+    private static readonly Brush Orange = Frozen(0xFF, 0xB1, 0x3D), Green = Frozen(0x9B, 0xD4, 0x5A);
 
     private readonly TimerService _timer;
     private readonly AppSettings _settings;
     private readonly WeatherService _weather;
+    private readonly CalendarService _calendar;
     private readonly IIslandHost _host;
     private readonly DispatcherTimer _clock = new();
     private DateTime _weekBuiltFor;
@@ -25,10 +27,12 @@ public partial class TodayPage : UserControl, IIslandPage
 
     public Size PreferredSize => new(540, 262);
 
-    public TodayPage(TimerService timer, AppSettings settings, IIslandHost host)
+    public TodayPage(TimerService timer, AppSettings settings, CalendarService calendar, IIslandHost host)
     {
         InitializeComponent();
         _host = host;
+        _calendar = calendar;
+        _calendar.Changed += () => { if (_visible) RenderNext(); };
         _timer = timer;
         _settings = settings;
         _weather = new WeatherService(settings);
@@ -53,6 +57,17 @@ public partial class TodayPage : UserControl, IIslandPage
             };
             Presets.Children.Add(chip);
         }
+        // Focus: 25-minute rounds with breaks in between, until reset.
+        var focus = new RadioButton
+        {
+            Style = (Style)FindResource("Chip"), Content = "Focus", GroupName = "TimerPresets",
+            Padding = new Thickness(0, 3, 0, 3), FontSize = 9.5, ToolTip = "25 minutes of focus, then a 5-minute break"
+        };
+        focus.Checked += (_, _) =>
+        {
+            if (_timer.Phase == TimerPhase.Plain) _timer.SetFocus();
+        };
+        Presets.Children.Add(focus);
 
         // Digits only; apply the typed duration when the field loses focus or Enter is pressed.
         foreach (var box in new[] { HoursBox, MinutesBox })
@@ -69,7 +84,8 @@ public partial class TodayPage : UserControl, IIslandPage
         _visible = true;
         RenderClock();
         RenderTimer();
-        RenderTodos();
+        RenderTodos(); // the assistant may have changed them
+        _ = _calendar.RefreshAsync();
         _ = RenderWeatherAsync();
     }
 
@@ -177,6 +193,7 @@ public partial class TodayPage : UserControl, IIslandPage
 
     private void ApplyTypedDuration()
     {
+        if (_timer.Phase != TimerPhase.Plain) return; // a focus session sets its own lengths
         int.TryParse(HoursBox.Text, out int h);
         int.TryParse(MinutesBox.Text, out int m);
         var duration = TimeSpan.FromHours(Math.Min(h, 23)) + TimeSpan.FromMinutes(Math.Min(m, 599));
@@ -204,8 +221,14 @@ public partial class TodayPage : UserControl, IIslandPage
         var remaining = _timer.Remaining;
         TimerText.Text = TimerService.Format(remaining);
         TimerRing.Value = _timer.Duration > TimeSpan.Zero ? remaining / _timer.Duration : 0;
+        TimerRing.Stroke = _timer.Phase == TimerPhase.Break ? Green : Orange;
+        PhaseText.Text = _timer.PhaseLabel;
+        PhaseText.Visibility = _timer.Phase == TimerPhase.Plain ? Visibility.Collapsed : Visibility.Visible;
         StartButton.Content = _timer.IsRunning ? "Pause" : _timer.IsActive ? "Resume" : "Start";
+        if (_timer.Phase == TimerPhase.Plain && Presets.Children[^1] is RadioButton { IsChecked: true } focus) focus.IsChecked = false;
     }
+
+    private static Brush Frozen(byte r, byte g, byte b) => (Brush)new SolidColorBrush(Color.FromRgb(r, g, b)).GetAsFrozen();
 
     // ---------- To-dos ----------
 
@@ -232,6 +255,21 @@ public partial class TodayPage : UserControl, IIslandPage
 
     private TodoItem? _animate; // the item whose new row should pop in
 
+    /// <summary>Under the week: the next calendar event if there is one, else the next to-do.</summary>
+    private void RenderNext()
+    {
+        if (_calendar.Next is { } e)
+        {
+            NextTitle.Text = e.Title;
+            NextSub.Text = CalendarService.When(e) + (e.Location.Length > 0 ? $" · {e.Location}" : "");
+            return;
+        }
+        var todos = _settings.Todos;
+        var next = todos.FirstOrDefault(t => !t.Done);
+        NextTitle.Text = next != null ? "Next" : "All caught up";
+        NextSub.Text = next?.Text ?? (todos.Count == 0 ? "Add a to-do on the right" : "Every to-do is done");
+    }
+
     private void RenderTodos()
     {
         var todos = _settings.Todos;
@@ -239,9 +277,7 @@ public partial class TodayPage : UserControl, IIslandPage
         TodoCount.Text = $"{done}/{todos.Count}";
         TodoRing.Value = todos.Count == 0 ? 0 : (double)done / todos.Count;
 
-        var next = todos.FirstOrDefault(t => !t.Done);
-        NextTitle.Text = next != null ? "Next" : "All caught up";
-        NextSub.Text = next?.Text ?? (todos.Count == 0 ? "Add a to-do on the right" : "Every to-do is done");
+        RenderNext();
 
         var sub = (Brush)FindResource("SubTextBrush");
         var textBrush = (Brush)FindResource("TextBrush");

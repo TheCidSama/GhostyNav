@@ -23,7 +23,7 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const int ControlsTab = 0, TodayTab = 1, ClipboardTab = 3, AppsTab = 4, SettingsTab = 6;
     private const int HotkeyApps = 1, HotkeyClipboard = 2;
-    private static readonly Size MediaPeekSize = new(360, 100), NoticePeekSize = new(300, 58);
+    private static readonly Size MediaPeekSize = new(360, 100), NoticePeekSize = new(300, 58), LevelPeekSize = new(290, 40);
 
     private enum Mode { Compact, Peek, Expanded, Assistant }
 
@@ -34,6 +34,13 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
     private readonly AudioService _audio = new();
     private readonly TimerService _timer = new();
     private readonly RoutineScheduler _routines = new();
+    private readonly NotificationMirror _notifications = new();
+    private readonly CalendarService _calendar = new();
+    private readonly PrivacyIndicator _privacy = new();
+    private readonly DeviceWatch _deviceWatch = new();
+    private readonly DispatcherTimer _updateTimer = new() { Interval = TimeSpan.FromSeconds(60) };
+
+    public UpdateInfo? AvailableUpdate { get; private set; }
     private readonly Queue<Func<bool>> _pendingNotices = new();
     private readonly DispatcherTimer _noticeRetry = new() { Interval = TimeSpan.FromSeconds(3) };
 
@@ -43,8 +50,10 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
     private int _tab;
 
     // Island shape springs
-    private const double CompactHeight = 24, CompactSlant = 8;
-    private readonly Spring _width = new(190), _height = new(CompactHeight), _radius = new(9), _slant = new(CompactSlant);
+    private const double CompactSlant = 8;
+    private double CompactHeight => _settings.NotchSize switch { NotchSize.Small => 21, NotchSize.Large => 28, _ => 24 };
+    private double CompactScale => _settings.NotchSize switch { NotchSize.Small => 0.86, NotchSize.Large => 1.18, _ => 1 };
+    private readonly Spring _width = new(190), _height = new(24), _radius = new(9), _slant = new(CompactSlant);
     private TimeSpan _lastFrame;
     private bool _animating;
 
@@ -54,6 +63,13 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
     private Size _expandedSize, _peekSize;
     private int _peekTab;
     private MediaCard? _peekCard;
+    private ShelfView? _shelfView;
+    // The hover peek: the mini player, the shelf, or both stacked.
+    private readonly StackPanel _hoverPeek = new();
+    private readonly ShelfService _shelf;
+    private readonly DispatcherTimer _dropLeaveTimer = new() { Interval = TimeSpan.FromMilliseconds(300) };
+    private LevelPeek? _levelPeek;
+    private bool _brightnessPrimed;
 
     private readonly DispatcherTimer _leaveTimer = new() { Interval = TimeSpan.FromSeconds(1.2) };
     private readonly DispatcherTimer _peekHoverTimer = new() { Interval = TimeSpan.FromMilliseconds(350) };
@@ -73,6 +89,7 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
     private readonly ScaleTransform[] _barScales = new ScaleTransform[4];
     private bool _barsRunning;
 
+    private static readonly Brush TimerOrange = (Brush)new SolidColorBrush(Color.FromRgb(0xFF, 0xB1, 0x3D)).GetAsFrozen();
     private readonly Assistant _assistant;
     private readonly DispatcherTimer _assistantDismiss = new();
     private readonly ScaleTransform[] _levelScales = new ScaleTransform[5];
@@ -84,12 +101,27 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
         _media = new MediaService(Dispatcher);
         _radios = new RadioService(Dispatcher);
         _clipboard = new ClipboardService(Dispatcher);
+        _shelf = new ShelfService(_settings);
+        _shelf.Changed += () =>
+        {
+            UpdateCompact();
+            if (_mode == Mode.Compact) UpdateTargets();
+            else if (_mode == Mode.Peek && PeekHost.Content == _hoverPeek &&
+                     !ShowHoverPeek(media: _peekCard?.Visibility == Visibility.Visible, autoHideMs: 0))
+                Collapse(); // the last file left the shelf
+        };
+        _dropLeaveTimer.Tick += (_, _) =>
+        {
+            _dropLeaveTimer.Stop();
+            if (_mode != Mode.Peek || PeekHost.Content != _hoverPeek) return;
+            if (!ShowHoverPeek(media: false, autoHideMs: 600)) Collapse();
+        };
 
         // Pages are built on first visit, so unused tabs cost no memory.
         _tabs =
         [
             ("Controls", () => new ControlsPage(_audio, _radios, _media, this)),
-            ("Today", () => new TodayPage(_timer, _settings, this)),
+            ("Today", () => new TodayPage(_timer, _settings, _calendar, this)),
             ("Stats", () => new StatsPage(_settings, this)),
             ("Clipboard", () => new ClipboardPage(_clipboard, this)),
             ("Apps", () => new AppsPage(_settings, this)),
@@ -98,12 +130,18 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
         ];
         _pages = new IIslandPage?[_tabs.Length];
         _tabButtons = BuildTabs();
+        UpdateTabVisibility();
         BuildBars();
         BuildLevelBars();
         Apply();
+        ApplyNotchSize();
 
         Fx.Layer = FxLayer;
-        _assistant = new Assistant(Dispatcher, this, _settings, _routines);
+        _assistant = new Assistant(Dispatcher, this,
+            new ActionContext(_media, _audio, _radios, _timer, _settings, _routines, text => _ = TypeIntoPreviousAppAsync(text)))
+        {
+            ExtraContext = () => _calendar.Available ? _calendar.DescribeForModel() : ""
+        };
         _routines.Due += OnRoutineDue;
         _noticeRetry.Tick += (_, _) => TryPendingNotice();
         Loaded += (_, _) => _routines.Start();
@@ -129,6 +167,11 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
         Island.MouseLeftButtonUp += OnIslandRelease;
         Island.MouseEnter += OnIslandEnter;
         Island.MouseLeave += OnIslandLeave;
+        Island.AllowDrop = true;
+        Island.DragEnter += OnIslandDragEnter;
+        Island.DragOver += OnIslandDragOver;
+        Island.DragLeave += OnIslandDragLeave;
+        Island.Drop += OnIslandDrop;
         Tabs.MouseWheel += (_, e) => { e.Handled = true; WheelTab(e.Delta < 0 ? 1 : -1); };
         PageHost.PreviewMouseLeftButtonDown += OnSwipeDown;
         PageHost.PreviewMouseMove += OnSwipeMove;
@@ -146,7 +189,8 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
         _peekHoverTimer.Tick += (_, _) =>
         {
             _peekHoverTimer.Stop();
-            if (_mode == Mode.Compact && _hover && _media.HasSession) ShowMediaPeek(autoHideMs: 0);
+            if (_mode == Mode.Compact && _hover && (_media.HasSession || _shelf.Count > 0))
+                ShowHoverPeek(media: _media.HasSession, autoHideMs: 0);
         };
         _peekHideTimer.Tick += (_, _) =>
         {
@@ -158,13 +202,19 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
         _media.Changed += OnMediaChanged;
         _media.TrackChanged += () =>
         {
-            if (_mode == Mode.Compact && !_hiddenForFullscreen) ShowMediaPeek(autoHideMs: 3500);
+            if (_mode == Mode.Compact && !_hiddenForFullscreen) ShowHoverPeek(media: true, shelf: false, autoHideMs: 3500);
         };
         _timer.Changed += OnTimerChanged;
-        _timer.Finished += () =>
+        _timer.Finished += ended =>
         {
             SystemSounds.Asterisk.Play();
-            ShowNotice("\uE916", "Timer done", $"{TimerService.Format(_timer.Duration)} timer finished", TodayTab);
+            var (title, text) = ended switch
+            {
+                TimerPhase.Focus => ("Focus round done", $"Take a {_timer.Duration.TotalMinutes:0}-minute break"),
+                TimerPhase.Break => ("Break's over", $"Focus round {_timer.Round} of {TimerService.RoundsPerSet} has started"),
+                _ => ("Timer done", $"{TimerService.Format(_timer.Duration)} timer finished")
+            };
+            ShowNotice("\uE916", title, text, TodayTab);
         };
 
         SourceInitialized += OnSourceInitialized;
@@ -172,11 +222,26 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
         {
             await _media.InitializeAsync();
             await _radios.InitializeAsync();
+            StartMoments();
+            await _calendar.StartAsync();
+            if (_settings.MirrorNotifications) await _notifications.StartAsync();
         };
+        // First look a minute after start (not to slow it down), then once a day.
+        _updateTimer.Tick += async (_, _) =>
+        {
+            _updateTimer.Interval = TimeSpan.FromDays(1);
+            if (!_settings.CheckForUpdates) return;
+            var known = AvailableUpdate;
+            if (await CheckForUpdateAsync() is { } update && update.Version != known?.Version)
+                ShowNoticeWhenFree("\uE896", $"GhostyNav {update.Version} is out", "Open Settings to update", SettingsTab);
+        };
+        _updateTimer.Start();
 
         MoveStartupEntryFromOldName();
         StartupItem.IsChecked = Registry.CurrentUser.OpenSubKey(RunKey)?.GetValue("GhostyNav") != null;
         SystemEvents.DisplaySettingsChanged += (_, _) => Dispatcher.InvokeAsync(PlaceWindow);
+        // Moving to a screen with different scaling resizes the window: centre it again.
+        DpiChanged += (_, _) => Dispatcher.InvokeAsync(PlaceWindow);
         PlaceWindow();
     }
 
@@ -196,12 +261,102 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
             0, 0, 0x2 /* WINEVENT_SKIPOWNPROCESS */);
 
         _fullscreenTimer.Start();
+        if (_settings.Screen != null) PlaceWindow(); // another screen needs the window handle
+
+        // Volume and brightness changes drop down from the notch.
+        _audio.ExternalChange += (volume, muted) => Dispatcher.BeginInvoke(() =>
+        {
+            if (_settings.LevelPopups) ShowLevel(muted || volume < 0.5 ? "\uE74F" : volume < 34 ? "\uE993" : volume < 67 ? "\uE994" : "\uE995",
+                muted ? 0 : volume, muted ? "Muted" : $"{Math.Round(volume)}");
+        });
+        _audio.ExternalDeviceSwitch += () => Dispatcher.BeginInvoke(() => _audio.Refresh());
+        _audio.Watch();
+        var brightness = Native.GUID_VIDEO_CURRENT_MONITOR_BRIGHTNESS;
+        Native.RegisterPowerSettingNotification(_hwnd, ref brightness, 0 /* DEVICE_NOTIFY_WINDOW_HANDLE */);
     }
 
+    /// <summary>The notch's small moments: notifications, meetings, mic and camera use, power and earbuds.</summary>
+    private void StartMoments()
+    {
+        _notifications.Arrived += n =>
+        {
+            string text = n.Body.Length > 0 ? $"{n.Title} · {n.Body}" : n.Title;
+            ShowNotice("\uEA8F", n.App, text, ControlsTab, width: 380, autoHideMs: 5000);
+        };
+        _calendar.StartingSoon += e =>
+            ShowNoticeWhenFree("\uE787", e.Title, CalendarService.When(e) + (e.Location.Length > 0 ? $" · {e.Location}" : ""), TodayTab,
+                shown: () => SystemSounds.Asterisk.Play());
+
+        _privacy.Changed += () => Dispatcher.BeginInvoke(UpdatePrivacyDots);
+        _privacy.Start();
+        UpdatePrivacyDots();
+
+        _deviceWatch.Moment += (glyph, title, text) => Dispatcher.BeginInvoke(() =>
+        {
+            if (_settings.DevicePeeks) ShowNotice(glyph, title, text, ControlsTab);
+        });
+        _deviceWatch.Start();
+        Closed += (_, _) => _privacy.Dispose();
+    }
+
+    private void UpdatePrivacyDots()
+    {
+        bool show = _settings.PrivacyDots;
+        MicDot.Visibility = show && _privacy.MicInUse ? Visibility.Visible : Visibility.Collapsed;
+        CameraDot.Visibility = show && _privacy.CameraInUse ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    public async Task<UpdateInfo?> CheckForUpdateAsync()
+    {
+        AvailableUpdate = await Updater.CheckAsync();
+        return AvailableUpdate;
+    }
+
+    /// <summary>Settings changed that the notch itself shows.</summary>
+    public async void ApplySettings()
+    {
+        UpdatePrivacyDots();
+        _assistant.SetChord(_settings.AssistantChord);
+        if (_settings.MirrorNotifications) await _notifications.StartAsync();
+        else _notifications.Stop();
+        UpdateTabVisibility();
+        ApplyNotchSize();
+        PlaceWindow();
+    }
+
+    private void ApplyNotchSize()
+    {
+        Compact.Height = CompactHeight;
+        Compact.Margin = new Thickness(21 * CompactScale, 0, 22 * CompactScale, 0);
+        if (_mode == Mode.Compact) UpdateTargets();
+    }
+
+    private void ShowLevel(string glyph, double percent, string label)
+    {
+        _levelPeek ??= new LevelPeek(this);
+        _levelPeek.Set(glyph, percent, label);
+        // Not over an open panel, the assistant or a notice the user hasn't seen yet.
+        if (_mode == Mode.Peek && PeekHost.Content != _levelPeek.Root && PeekHost.Content != _hoverPeek) return;
+        _peekCard?.SetActive(false);
+        ShowPeek(_levelPeek.Root, LevelPeekSize, ControlsTab, autoHideMs: 1600);
+    }
+
+    /// <summary>Top centre of the chosen screen (the main one unless another was picked in Settings).</summary>
     private void PlaceWindow()
     {
-        Left = (SystemParameters.PrimaryScreenWidth - Width) / 2;
-        Top = 0;
+        var screen = _hwnd == 0 || _settings.Screen == null ? null
+            : Native.Screens().FirstOrDefault(s => s.Device == _settings.Screen && !s.Primary);
+        if (screen == null)
+        {
+            Left = (SystemParameters.PrimaryScreenWidth - Width) / 2;
+            Top = 0;
+            return;
+        }
+        // Another screen may have its own scaling: place in physical pixels, and WPF rescales the window.
+        var r = screen.Bounds;
+        int width = (int)Math.Round(Width * screen.Dpi / 96);
+        const uint SWP_NOSIZE = 0x1, SWP_NOZORDER = 0x4, SWP_NOACTIVATE = 0x10;
+        Native.SetWindowPos(_hwnd, 0, r.Left + (r.Right - r.Left - width) / 2, r.Top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     }
 
     // ---------- Shape animation ----------
@@ -226,7 +381,7 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
                 break;
             default:
                 // A low notch with sloped sides; wider when it has a live activity to show.
-                w = _media.HasSession ? 250 : _timerShown ? 220 : 190;
+                w = (_media.HasSession ? 250 : _timerShown || _shelf.Count > 0 ? 220 : 190) * CompactScale;
                 h = CompactHeight;
                 if (_hover) { w += 12; h += 3; }
                 r = 9;
@@ -362,7 +517,7 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
         _hover = true;
         _leaveTimer.Stop();
         _peekHideTimer.Stop();
-        if (_mode == Mode.Compact && _media.HasSession) _peekHoverTimer.Start();
+        if (_mode == Mode.Compact && (_media.HasSession || _shelf.Count > 0)) _peekHoverTimer.Start();
         if (_mode == Mode.Compact) UpdateTargets();
     }
 
@@ -460,11 +615,69 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
         UpdateTargets();
     }
 
-    private void ShowMediaPeek(int autoHideMs)
+    /// <param name="media">Include the mini player.</param>
+    /// <param name="shelf">Include the shelf, when it has files (or files are being dropped).</param>
+    private bool ShowHoverPeek(bool media, int autoHideMs, bool shelf = true, bool dropping = false)
     {
-        _peekCard ??= new MediaCard(_media, chromeless: true);
-        ShowPeek(_peekCard, MediaPeekSize, ControlsTab, autoHideMs);
-        _peekCard.SetActive(true);
+        if (_peekCard == null)
+        {
+            _peekCard = new MediaCard(_media, chromeless: true);
+            _shelfView = new ShelfView(_shelf);
+            _hoverPeek.Children.Add(_peekCard);
+            _hoverPeek.Children.Add(_shelfView);
+        }
+        media &= _media.HasSession;
+        shelf = dropping || shelf && _shelf.Count > 0;
+        if (!media && !shelf) return false;
+        _peekCard.Height = MediaPeekSize.Height;
+        _peekCard.Visibility = media ? Visibility.Visible : Visibility.Collapsed;
+        _shelfView!.Visibility = shelf ? Visibility.Visible : Visibility.Collapsed;
+        _shelfView.SetDropping(dropping);
+
+        var size = new Size(
+            shelf ? 400 : MediaPeekSize.Width,
+            (media ? MediaPeekSize.Height : 6) + (shelf ? ShelfView.ShelfHeight : 0));
+        if (!ShowPeek(_hoverPeek, size, ControlsTab, autoHideMs)) return false;
+        _peekCard.SetActive(media);
+        return true;
+    }
+
+    // ---------- Dropping files on the shelf ----------
+
+    private static bool HasFiles(DragEventArgs e) => e.Data.GetDataPresent(DataFormats.FileDrop);
+
+    private bool CanTakeDrop(DragEventArgs e) =>
+        HasFiles(e) && _shelfView?.DraggingOut != true && _mode is Mode.Compact or Mode.Peek && !_hiddenForFullscreen;
+
+    private void OnIslandDragEnter(object sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        e.Effects = CanTakeDrop(e) ? DragDropEffects.Copy : DragDropEffects.None;
+        if (e.Effects == DragDropEffects.None) return;
+        _dropLeaveTimer.Stop();
+        _peekHoverTimer.Stop();
+        ShowHoverPeek(media: false, autoHideMs: 0, dropping: true);
+    }
+
+    private void OnIslandDragOver(object sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        e.Effects = CanTakeDrop(e) ? DragDropEffects.Copy : DragDropEffects.None;
+        if (e.Effects != DragDropEffects.None) _dropLeaveTimer.Stop();
+    }
+
+    // Leaving one element for another inside the island also raises DragLeave: wait a moment.
+    private void OnIslandDragLeave(object sender, DragEventArgs e) => _dropLeaveTimer.Start();
+
+    private void OnIslandDrop(object sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        _dropLeaveTimer.Stop();
+        if (!CanTakeDrop(e) || e.Data.GetData(DataFormats.FileDrop) is not string[] files) return;
+        _shelf.Add(files);
+        e.Effects = DragDropEffects.Copy;
+        // Leave the shelf up for a moment, showing what landed.
+        ShowHoverPeek(media: false, autoHideMs: 2500);
     }
 
     /// <summary>
@@ -618,7 +831,29 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
     private static int Position(int tab) => tab == SettingsTab ? ControlsTab : tab;
 
     /// <summary>The next or previous tab in the tab bar (from Settings, back means Controls).</summary>
-    private void StepTab(int direction) => SelectTab(Math.Clamp(Position(_tab) + direction, 0, SettingsTab - 1));
+    private void StepTab(int direction)
+    {
+        // Hidden tabs are skipped over.
+        for (int i = Position(_tab) + direction; i >= 0 && i < SettingsTab; i += direction)
+        {
+            if (!IsTabShown(i)) continue;
+            SelectTab(i);
+            return;
+        }
+    }
+
+    private bool IsTabShown(int tab) => tab is ControlsTab or SettingsTab || !_settings.HiddenTabs.Contains(_tabs[tab].Title);
+
+    private int LastShownTab => Enumerable.Range(0, SettingsTab).Last(IsTabShown);
+
+    /// <summary>The names of the tabs that can be hidden in Settings.</summary>
+    public IEnumerable<string> OptionalTabs => _tabs.Skip(1).Take(SettingsTab - 1).Select(t => t.Title);
+
+    private void UpdateTabVisibility()
+    {
+        for (int i = 0; i < SettingsTab; i++) _tabButtons[i].Visibility = IsTabShown(i) ? Visibility.Visible : Visibility.Collapsed;
+        if (_mode == Mode.Expanded && !IsTabShown(_tab)) SelectTab(ControlsTab);
+    }
 
     public void OpenSettings()
     {
@@ -766,7 +1001,7 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
         }
         else if (ctrl && e.Key >= Key.D1 && e.Key < Key.D1 + _tabs.Length)
         {
-            SelectTab(e.Key - Key.D1);
+            if (IsTabShown(e.Key - Key.D1)) SelectTab(e.Key - Key.D1);
             e.Handled = true;
         }
     }
@@ -821,7 +1056,7 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
         _lastDragX = p.X;
 
         // Rubber-band past the first and last tab.
-        bool atEdge = _tab == ControlsTab && dx > 0 || Position(_tab) == SettingsTab - 1 && dx < 0;
+        bool atEdge = _tab == ControlsTab && dx > 0 || Position(_tab) == LastShownTab && dx < 0;
         shift.X = atEdge ? dx / 3 : dx;
         e.Handled = true;
     }
@@ -836,7 +1071,7 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
 
         double dx = shift.X;
         bool flick = Math.Abs(_dragVelocity) > 600 && Math.Abs(dx) > 15;
-        if ((dx < -70 || flick && dx < 0) && Position(_tab) < SettingsTab - 1) StepTab(1);
+        if ((dx < -70 || flick && dx < 0) && Position(_tab) < LastShownTab) StepTab(1);
         else if ((dx > 70 || flick && dx > 0) && _tab != ControlsTab) StepTab(-1);
         else SlideHome((FrameworkElement)_pages[_tab]!);
     }
@@ -866,6 +1101,13 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
                 break;
             case Native.WM_CLIPBOARDUPDATE:
                 _clipboard.OnClipboardUpdate();
+                break;
+            case Native.WM_POWERBROADCAST when wParam == Native.PBT_POWERSETTINGCHANGE:
+                var setting = System.Runtime.InteropServices.Marshal.PtrToStructure<Native.POWERBROADCAST_SETTING>(lParam);
+                if (setting.PowerSetting != Native.GUID_VIDEO_CURRENT_MONITOR_BRIGHTNESS) break;
+                // Windows reports the current value as soon as we register: that one isn't a change.
+                if (_brightnessPrimed && _settings.LevelPopups) ShowLevel("\uE706", setting.Data, $"{setting.Data}");
+                _brightnessPrimed = true;
                 break;
         }
         return 0;
@@ -897,6 +1139,18 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
             await Task.Delay(90); // let the target window take focus before the keys arrive
             Native.SendCtrlV();
         }
+    }
+
+    /// <summary>Gives focus back to the app the user was working in and types the text there.</summary>
+    private async Task TypeIntoPreviousAppAsync(string text)
+    {
+        nint target = _previousForeground;
+        if (target == 0 || !Native.IsWindow(target)) return;
+        Native.SetForegroundWindow(target);
+        // Let the window take focus, and wait for the push-to-talk keys to be let go.
+        await Task.Delay(120);
+        for (int i = 0; i < 40 && Native.ModifiersDown(); i++) await Task.Delay(50);
+        await Task.Run(() => Native.SendText(text));
     }
 
     public IDisposable HoldOpen()
@@ -1079,13 +1333,19 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
     {
         UpdateCompact();
         if (_mode == Mode.Compact) UpdateTargets();
-        else if (_mode == Mode.Peek && PeekHost.Content == _peekCard && !_media.HasSession) Collapse();
+        else if (_mode == Mode.Peek && PeekHost.Content == _hoverPeek && _peekCard?.Visibility == Visibility.Visible && !_media.HasSession)
+        {
+            if (!ShowHoverPeek(media: false, autoHideMs: 0)) Collapse();
+        }
     }
 
     private void OnTimerChanged()
     {
         bool show = _timer.IsActive && !_media.HasSession;
         CompactTimerText.Text = TimerService.Format(_timer.Remaining);
+        // A break counts down in green, like the to-dos ticked off.
+        var colour = _timer.Phase == TimerPhase.Break ? (Brush)FindResource("RamBrush") : TimerOrange;
+        CompactTimerText.Foreground = CompactTimerIcon.Foreground = colour;
         if (show == _timerShown) return;
         UpdateCompact();
         if (_mode == Mode.Compact) UpdateTargets();
@@ -1095,8 +1355,11 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
     {
         bool media = _media.HasSession;
         _timerShown = !media && _timer.IsActive;
+        bool shelf = !media && !_timerShown && _shelf.Count > 0;
         CompactArt.Visibility = Bars.Visibility = media ? Visibility.Visible : Visibility.Hidden;
         CompactTimerIcon.Visibility = CompactTimerText.Visibility = _timerShown ? Visibility.Visible : Visibility.Hidden;
+        CompactShelfIcon.Visibility = CompactShelfText.Visibility = shelf ? Visibility.Visible : Visibility.Hidden;
+        CompactShelfText.Text = _shelf.Count.ToString();
 
         CompactArt.Background = _media.Art != null
             ? new ImageBrush(_media.Art) { Stretch = Stretch.UniformToFill }

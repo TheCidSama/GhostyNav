@@ -39,6 +39,19 @@
                                 VerticalAlignment="Center" Height="11" Visibility="Hidden" />
                     <TextBlock x:Name="CompactTimerText" FontSize="11" FontWeight="SemiBold" Foreground="#FFB13D"
                                HorizontalAlignment="Right" VerticalAlignment="Center" Visibility="Hidden" />
+                    <!-- Another app is using the microphone (orange) or camera (green), like a phone's dots -->
+                    <StackPanel x:Name="PrivacyDots" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Margin="0,0,0,1">
+                        <Ellipse x:Name="CameraDot" Width="6" Height="6" Fill="#4CD964" Margin="2,0" Visibility="Collapsed"
+                                 ToolTip="An app is using the camera" />
+                        <Ellipse x:Name="MicDot" Width="6" Height="6" Fill="#FF9F0A" Margin="2,0" Visibility="Collapsed"
+                                 ToolTip="An app is using the microphone" />
+                    </StackPanel>
+                    <!-- Files on the shelf: hover to see them -->
+                    <TextBlock x:Name="CompactShelfIcon" Style="{StaticResource Icon}" Text="&#xE7B8;" FontSize="11"
+                               Foreground="{StaticResource SubTextBrush}" HorizontalAlignment="Left" Visibility="Hidden" />
+                    <TextBlock x:Name="CompactShelfText" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource SubTextBrush}"
+                               HorizontalAlignment="Right" VerticalAlignment="Center" Visibility="Hidden" />
                 </Grid>
 
                 <!-- Voice assistant: the notch drops down with the ghost inside, status beside it -->

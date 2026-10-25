@@ -28,14 +28,21 @@ public sealed class Assistant : IDisposable
 {
     private static readonly TimeSpan MaxHold = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan PendingTimeout = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan ConfirmTimeout = TimeSpan.FromSeconds(20);
+    // Follow-ups only make sense shortly after: an old exchange would just confuse a new question.
+    private static readonly TimeSpan HistoryLifetime = TimeSpan.FromMinutes(5);
+    private const int HistoryTurns = 3;
     private const int LongAnswerChars = 100;
 
     private readonly Dispatcher _ui;
     private readonly IAssistantView _view;
     private readonly AppSettings _settings;
     private readonly RoutineScheduler _routines;
+    private readonly ActionContext _tools;
     private readonly Speaker _speaker = new();
     private readonly KeyChord _chord;
+    private readonly List<AgentTurn> _history = [];
+    private DateTime _lastTurn;
     private readonly DispatcherTimer _holdWatch = new() { Interval = TimeSpan.FromMilliseconds(200) };
     private readonly DispatcherTimer _pendingTimer = new() { Interval = PendingTimeout };
     private Session? _session;
@@ -67,13 +74,20 @@ public sealed class Assistant : IDisposable
         }
     }
 
-    public Assistant(Dispatcher ui, IAssistantView view, AppSettings settings, RoutineScheduler routines)
+    /// <summary>More facts for the model, such as the next calendar events.</summary>
+    public Func<string>? ExtraContext { get; set; }
+
+    /// <summary>The push-to-talk keys, as shown to the user ("Ctrl+Alt").</summary>
+    public string ChordName => _chord.Name;
+
+    public Assistant(Dispatcher ui, IAssistantView view, ActionContext tools)
     {
         _ui = ui;
         _view = view;
-        _settings = settings;
-        _routines = routines;
-        _chord = new KeyChord(ui);
+        _tools = tools;
+        _settings = tools.Settings;
+        _routines = tools.Routines;
+        _chord = new KeyChord(ui, _settings.AssistantChord);
         _chord.Pressed += Begin;
         _chord.Released += () => _ = FinishAsync();
         _chord.Cancelled += () =>
@@ -85,7 +99,7 @@ public sealed class Assistant : IDisposable
         _holdWatch.Tick += (_, _) =>
         {
             if (_session is not { Listening: true } s) return;
-            if (KeyChord.IsHeld() && s.Clock.Elapsed < MaxHold) return;
+            if (_chord.IsHeld() && s.Clock.Elapsed < MaxHold) return;
             _chord.Reset();
             _ = FinishAsync();
         };
@@ -98,6 +112,9 @@ public sealed class Assistant : IDisposable
     }
 
     public bool IsListening => _session?.Listening == true;
+
+    /// <summary>Switches the push-to-talk keys.</summary>
+    public void SetChord(Chord chord) => _chord.Chord = chord;
 
     private void Begin()
     {
@@ -200,7 +217,7 @@ public sealed class Assistant : IDisposable
             if (text.Trim().Length == 0 && images.Count == 0)
             {
                 _view.SetAssistantStatus("Didn't hear you");
-                _view.Panel.ShowError("I didn't catch that.", "Hold Ctrl+Alt while you speak, then let go.");
+                _view.Panel.ShowError("I didn't catch that.", $"Hold {ChordName} while you speak, then let go.");
                 _view.EndAssistant(TimeSpan.FromSeconds(3.5));
                 return;
             }
@@ -211,28 +228,55 @@ public sealed class Assistant : IDisposable
                 _pending = s.Overlay;
                 _pendingTimer.Start();
                 _view.SetAssistantStatus("Waiting");
-                _view.Panel.ShowWaiting(images.Count);
+                _view.Panel.ShowWaiting(images.Count, ChordName);
                 return;
             }
+            if (DateTime.Now - _lastTurn > HistoryLifetime) _history.Clear();
 
             List<AppEntry> apps;
             try { apps = await AppIndex.GetAsync().WaitAsync(TimeSpan.FromSeconds(3), s.Cts.Token); }
             catch (TimeoutException) { apps = AppIndex.Apps; }
             var names = apps.Select(a => a.Name).Take(400).ToList();
 
-            string context = $"Current time: {DateTime.Now:dddd yyyy-MM-dd HH:mm}.\n{_routines.DescribeForModel()}";
-            var reply = await GeminiAgent.AskAsync(s.Key, text, images, names, context, s.Cts.Token);
+            string context = $"Current time: {DateTime.Now:dddd yyyy-MM-dd HH:mm}.\n{_routines.DescribeForModel()}\n{DescribeTodos()}";
+            if (ExtraContext?.Invoke() is { Length: > 0 } extra) context += "\n" + extra;
+            var reply = await GeminiAgent.AskAsync(s.Key, text, images, names, context, _history, s.Cts.Token);
             if (_session != s) return;
+            string asked = images.Count > 0 ? $"(Circled {images.Count} region(s) on screen.) {text.Trim()}" : text.Trim();
 
             if (reply.Calls.Count > 0)
             {
-                var results = reply.Calls.Select(call => AssistantActions.Run(call, _routines)).ToList();
+                var calls = reply.Calls.ToList();
+                // Text inside a circled area could be an instruction in disguise: ask before acting on it.
+                if (images.Count > 0 && calls.Any(AssistantActions.NeedsConfirmation))
+                {
+                    _view.SetAssistantStatus("Check");
+                    string question = string.Join(" ", calls.Where(AssistantActions.NeedsConfirmation).Select(AssistantActions.Describe));
+                    bool allowed = await _view.Panel.ConfirmAsync(question, "You circled something, so I'm checking first.",
+                        ConfirmTimeout, s.Cts.Token);
+                    if (_session != s) return;
+                    if (!allowed) calls.RemoveAll(AssistantActions.NeedsConfirmation);
+                    if (calls.Count == 0)
+                    {
+                        _view.Panel.ShowResults([new ActionResult("\uE711", "Okay, I won't")]);
+                        _view.SetAssistantStatus("Cancelled");
+                        Remember(asked, "(Cancelled by the user.)");
+                        _view.EndAssistant(TimeSpan.FromSeconds(2.5));
+                        return;
+                    }
+                }
+
+                var results = new List<ActionResult>();
+                foreach (var call in calls) results.Add(await AssistantActions.RunAsync(call, _tools));
+                if (_session != s) return;
+                Remember(asked, "Done: " + string.Join("; ", results.Select(r => r.Text)));
                 _view.Panel.ShowResults(results);
                 _view.SetAssistantStatus(results.All(r => r.Ok) ? "Done" : "Hmm");
                 await SpeakThenEndAsync(string.Join(". ", results.Select(r => r.Text)), TimeSpan.FromSeconds(3.5));
             }
             else if (reply.Text.Length > 0)
             {
+                Remember(asked, reply.Text);
                 _view.Panel.ShowAnswer(reply.Text);
                 _view.SetAssistantStatus("Answered");
                 // 5 s to read a short answer; 10 s for one longer than about two lines on the card.
@@ -262,6 +306,20 @@ public sealed class Assistant : IDisposable
             if (_session == s) _session = null;
             s.Dispose();
         }
+    }
+
+    private void Remember(string user, string model)
+    {
+        _history.Add(new AgentTurn(user, model));
+        if (_history.Count > HistoryTurns) _history.RemoveAt(0);
+        _lastTurn = DateTime.Now;
+    }
+
+    private string DescribeTodos()
+    {
+        var todos = _settings.Todos;
+        if (todos.Count == 0) return "To-do list: empty.";
+        return "To-do list: " + string.Join("; ", todos.Select(t => (t.Done ? "[done] " : "[ ] ") + t.Text)) + ".";
     }
 
     /// <summary>Reads text aloud in the chosen voice (for routine reminders); returns how long it lasts.</summary>

@@ -112,6 +112,106 @@ internal static partial class Native
         SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
     }
 
+    /// <summary>Types text into the focused window as keyboard input, without touching the clipboard.</summary>
+    public static void SendText(string text)
+    {
+        const ushort VK_RETURN = 0x0D, VK_TAB = 0x09;
+        const uint KEYUP = 0x2, UNICODE = 0x4;
+        var inputs = new List<INPUT>(text.Length * 2);
+        foreach (char c in text)
+        {
+            switch (c)
+            {
+                case '\r':
+                    continue;
+                case '\n' or '\t':
+                    ushort vk = c == '\n' ? VK_RETURN : VK_TAB;
+                    inputs.Add(new INPUT { type = 1, ki = new KEYBDINPUT { wVk = vk } });
+                    inputs.Add(new INPUT { type = 1, ki = new KEYBDINPUT { wVk = vk, dwFlags = KEYUP } });
+                    break;
+                default:
+                    inputs.Add(new INPUT { type = 1, ki = new KEYBDINPUT { wScan = c, dwFlags = UNICODE } });
+                    inputs.Add(new INPUT { type = 1, ki = new KEYBDINPUT { wScan = c, dwFlags = UNICODE | KEYUP } });
+                    break;
+            }
+        }
+        // In batches, so a long text doesn't overflow the target app's input queue.
+        const int Batch = 200;
+        for (int i = 0; i < inputs.Count; i += Batch)
+        {
+            var batch = inputs.GetRange(i, Math.Min(Batch, inputs.Count - i)).ToArray();
+            SendInput((uint)batch.Length, batch, Marshal.SizeOf<INPUT>());
+            Thread.Sleep(5);
+        }
+    }
+
+    [LibraryImport("user32.dll")]
+    private static partial short GetAsyncKeyState(int vk);
+
+    /// <summary>True while Ctrl, Alt, Shift or Win is held, which would turn typed letters into shortcuts.</summary>
+    public static bool ModifiersDown() =>
+        new[] { 0x10, 0x11, 0x12, 0x5B, 0x5C }.Any(vk => (GetAsyncKeyState(vk) & 0x8000) != 0);
+
+    // ---------- Screens ----------
+
+    public sealed record Screen(string Device, RECT Bounds, bool Primary, uint Dpi);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct MONITORINFOEX
+    {
+        public int cbSize;
+        public RECT rcMonitor, rcWork;
+        public uint dwFlags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string szDevice;
+    }
+
+    private delegate bool MonitorEnumProc(nint monitor, nint dc, ref RECT rect, nint data);
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumDisplayMonitors(nint dc, nint clip, MonitorEnumProc proc, nint data);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetMonitorInfoW")]
+    private static extern bool GetMonitorInfoEx(nint monitor, ref MONITORINFOEX info);
+
+    [DllImport("shcore.dll")]
+    private static extern int GetDpiForMonitor(nint monitor, int type, out uint dpiX, out uint dpiY);
+
+    [DllImport("user32.dll")]
+    public static extern bool SetWindowPos(nint hwnd, nint after, int x, int y, int cx, int cy, uint flags);
+
+    /// <summary>The connected screens, main one first, in physical pixels.</summary>
+    public static List<Screen> Screens()
+    {
+        var list = new List<Screen>();
+        EnumDisplayMonitors(0, 0, (nint monitor, nint _, ref RECT _, nint _) =>
+        {
+            var info = new MONITORINFOEX { cbSize = Marshal.SizeOf<MONITORINFOEX>() };
+            if (GetMonitorInfoEx(monitor, ref info))
+            {
+                uint dpi = GetDpiForMonitor(monitor, 0 /* MDT_EFFECTIVE_DPI */, out uint x, out _) == 0 ? x : 96;
+                list.Add(new Screen(info.szDevice, info.rcMonitor, (info.dwFlags & 1) != 0, dpi));
+            }
+            return true;
+        }, 0);
+        return list.OrderByDescending(s => s.Primary).ThenBy(s => s.Bounds.Left).ToList();
+    }
+
+    // ---------- Brightness changes ----------
+
+    public const int WM_POWERBROADCAST = 0x0218, PBT_POWERSETTINGCHANGE = 0x8013;
+    public static readonly Guid GUID_VIDEO_CURRENT_MONITOR_BRIGHTNESS = new("8ffee2c6-2d01-46be-adb9-398addc5b4ff");
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct POWERBROADCAST_SETTING
+    {
+        public Guid PowerSetting;
+        public uint DataLength;
+        public uint Data; // a DWORD for brightness
+    }
+
+    [DllImport("user32.dll")]
+    public static extern nint RegisterPowerSettingNotification(nint recipient, ref Guid setting, int flags);
+
     // ---------- Settings broadcast (dark mode) ----------
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]

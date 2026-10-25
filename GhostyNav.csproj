@@ -19,7 +19,7 @@
     <AssemblyTitle>GhostyNav</AssemblyTitle>
     <Company>GhostyNav</Company>
     <Copyright>Copyright (c) 2026 GhostyNav contributors</Copyright>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 
     <!-- Low-memory runtime settings: workstation, non-concurrent GC that

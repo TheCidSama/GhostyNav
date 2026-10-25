@@ -43,14 +43,37 @@ public static class Store
         return new T();
     }
 
-    public static void Save<T>(string name, T value)
+    public static void Save<T>(string name, T value) =>
+        Write(name, () => File.WriteAllText(Path.Combine(Folder, name) + ".tmp", JsonSerializer.Serialize(value, Options)));
+
+    /// <summary>Like <see cref="Load{T}"/>, for a file encrypted with <see cref="Protect"/>.</summary>
+    public static T? LoadProtected<T>(string name, string purpose) where T : class
+    {
+        try
+        {
+            string path = Path.Combine(Folder, name);
+            if (File.Exists(path) && Protect.DecryptBytes(File.ReadAllBytes(path), purpose) is { } json)
+                return JsonSerializer.Deserialize<T>(json, Options);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Could not read {name}: {ex.Message}");
+        }
+        return null;
+    }
+
+    public static void SaveProtected<T>(string name, T value, string purpose) =>
+        Write(name, () => File.WriteAllBytes(Path.Combine(Folder, name) + ".tmp",
+            Protect.EncryptBytes(JsonSerializer.SerializeToUtf8Bytes(value, Options), purpose)));
+
+    private static void Write(string name, Action writeTemp)
     {
         try
         {
             Directory.CreateDirectory(Folder);
             string path = Path.Combine(Folder, name);
             // Write-then-rename so a crash mid-write can't leave a truncated file.
-            File.WriteAllText(path + ".tmp", JsonSerializer.Serialize(value, Options));
+            writeTemp();
             File.Move(path + ".tmp", path, overwrite: true);
         }
         catch (Exception ex)
@@ -91,6 +114,22 @@ public sealed class AppSettings
     /// <summary>Blue glow along the screen edges while the voice assistant listens.</summary>
     public bool AssistantHalo { get; set; } = true;
     public Assistant.AssistantVoice AssistantVoice { get; set; } = Assistant.AssistantVoice.Female;
+    public Assistant.Chord AssistantChord { get; set; } = Assistant.Chord.CtrlAlt;
+    /// <summary>Volume and brightness changes drop down from the notch.</summary>
+    public bool LevelPopups { get; set; } = true;
+    /// <summary>Paths of files parked on the notch's shelf.</summary>
+    public List<string> Shelf { get; set; } = [];
+    public bool MirrorNotifications { get; set; } = true;
+    public bool PrivacyDots { get; set; } = true;
+    /// <summary>Charging, low battery and earbuds connecting.</summary>
+    public bool DevicePeeks { get; set; } = true;
+    public bool CheckForUpdates { get; set; } = true;
+    public NotchSize NotchSize { get; set; } = NotchSize.Medium;
+    public string Accent { get; set; } = "Orange";
+    /// <summary>Device name of the screen the notch sits on (\\.\DISPLAY2); null for the main one.</summary>
+    public string? Screen { get; set; }
+    /// <summary>Tabs left out of the tab bar (Controls always stays).</summary>
+    public List<string> HiddenTabs { get; set; } = [];
 
     public void Save() => Store.Save("settings.json", this);
 
@@ -124,6 +163,9 @@ public sealed class AppSettings
         return changed;
     }
 }
+
+/// <summary>How big the closed notch is.</summary>
+public enum NotchSize { Small, Medium, Large }
 
 public sealed class TodoItem
 {

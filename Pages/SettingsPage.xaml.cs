@@ -1,8 +1,11 @@
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Shapes;
+using GhostyNav.Controls;
 using GhostyNav.Services;
 using GhostyNav.Services.Assistant;
 
@@ -11,13 +14,16 @@ namespace GhostyNav.Pages;
 public partial class SettingsPage : UserControl, IIslandPage, IResizingPage
 {
     private static readonly Brush Good = Frozen(0x9B, 0xD4, 0x5A), Bad = Frozen(0xFF, 0x8A, 0x8A);
+    private static readonly string[] SectionNames = ["Assistant", "Notch", "About"];
     private readonly AppSettings _settings;
     private readonly RoutineScheduler _routines;
     private readonly IIslandHost _host;
     private readonly Speaker _preview = new();
+    private readonly StackPanel[] _sections;
     private int _check; // ignore results of checks that a newer action superseded
+    private bool _updating;
 
-    // Grows with the routines list (which scrolls past three rows).
+    // Grows with the section shown and the routines list (which scrolls past three rows).
     public Size PreferredSize
     {
         get
@@ -35,30 +41,34 @@ public partial class SettingsPage : UserControl, IIslandPage, IResizingPage
         _settings = settings;
         _routines = routines;
         _host = host;
+        _sections = [AssistantSection, NotchSection, AboutSection];
         _routines.Changed += () =>
         {
             RenderRoutines();
             PreferredSizeChanged?.Invoke(); // the host re-fits the island only if this tab is showing
         };
-        RenderRoutines();
-        foreach (var voice in Enum.GetValues<AssistantVoice>())
+
+        for (int i = 0; i < SectionNames.Length; i++)
         {
-            var chip = new RadioButton
-            {
-                Style = (Style)FindResource("Chip"), Content = voice.ToString(), GroupName = "AssistantVoice",
-                Tag = voice, IsChecked = voice == settings.AssistantVoice
-            };
-            chip.Checked += OnVoiceChosen;
-            VoiceChoices.Children.Add(chip);
+            int index = i;
+            var chip = Chip(SectionNames[i], "SettingsSection", i == 0);
+            chip.Checked += (_, _) => ShowSection(index);
+            Sections.Children.Add(chip);
         }
-        UpdateVoiceHint();
+
+        BuildAssistant();
+        BuildNotch();
+        BuildAbout();
     }
 
     public void OnShow()
     {
         ShowSaved();
         HaloSwitch.IsChecked = _settings.AssistantHalo;
+        AutoUpdateSwitch.IsChecked = _settings.CheckForUpdates;
         RenderRoutines(); // "next" times move on while the tab is closed
+        RenderScreens();  // a screen may have been plugged in since
+        RenderUpdate();
     }
 
     public void OnHide()
@@ -66,6 +76,54 @@ public partial class SettingsPage : UserControl, IIslandPage, IResizingPage
         KeyBox.Clear();
         _check++;
         _preview.Stop();
+    }
+
+    private void ShowSection(int index)
+    {
+        for (int i = 0; i < _sections.Length; i++) _sections[i].Visibility = i == index ? Visibility.Visible : Visibility.Collapsed;
+        PreferredSizeChanged?.Invoke();
+    }
+
+    /// <summary>Saves, and lets the notch catch up with what changed.</summary>
+    private void Changed()
+    {
+        _settings.Save();
+        _host.ApplySettings();
+    }
+
+    // ---------- Assistant ----------
+
+    private void BuildAssistant()
+    {
+        foreach (var voice in Enum.GetValues<AssistantVoice>())
+        {
+            var chip = Chip(voice.ToString(), "AssistantVoice", voice == _settings.AssistantVoice);
+            chip.Tag = voice;
+            chip.Checked += OnVoiceChosen;
+            VoiceChoices.Children.Add(chip);
+        }
+        UpdateVoiceHint();
+
+        foreach (var chord in Enum.GetValues<Chord>())
+        {
+            var chip = Chip(KeyChord.NameOf(chord), "AssistantChord", chord == _settings.AssistantChord);
+            chip.Checked += (_, _) =>
+            {
+                if (chord == _settings.AssistantChord) return;
+                _settings.AssistantChord = chord;
+                UpdateChordText();
+                Changed();
+            };
+            ChordChoices.Children.Add(chip);
+        }
+        UpdateChordText();
+    }
+
+    private void UpdateChordText()
+    {
+        string keys = KeyChord.NameOf(_settings.AssistantChord);
+        KeyIntro.Text = $"Powers the voice assistant (hold {keys}). Kept only on this PC.";
+        NoRoutines.Text = $"None yet. Hold {keys} and say “remind me to stretch every day at 3” or “open Spotify every weekday at 9”.";
     }
 
     private void OnHaloChanged(object sender, RoutedEventArgs e)
@@ -211,11 +269,217 @@ public partial class SettingsPage : UserControl, IIslandPage, IResizingPage
         else Status("\uE783", problem, Bad);
     }
 
+    private void OnGetKey(object sender, RoutedEventArgs e) => Open("https://aistudio.google.com/apikey");
+
+    // ---------- Notch ----------
+
+    private void BuildNotch()
+    {
+        foreach (var size in Enum.GetValues<NotchSize>())
+        {
+            var chip = Chip(size.ToString(), "NotchSize", size == _settings.NotchSize);
+            chip.Checked += (_, _) =>
+            {
+                _settings.NotchSize = size;
+                Changed();
+            };
+            SizeChoices.Children.Add(chip);
+        }
+
+        AccentName.Text = Theme.Find(_settings.Accent).Name;
+        foreach (var accent in Theme.Accents)
+        {
+            var swatch = new RadioButton
+            {
+                GroupName = "Accent", IsChecked = accent.Name == Theme.Find(_settings.Accent).Name, ToolTip = accent.Name,
+                Cursor = Cursors.Hand, Focusable = false, Margin = new Thickness(3, 0, 0, 0),
+                Template = SwatchTemplate(accent.Main)
+            };
+            swatch.Checked += (_, _) =>
+            {
+                _settings.Accent = accent.Name;
+                AccentName.Text = accent.Name;
+                Theme.Apply(accent.Name);
+                _settings.Save();
+            };
+            AccentChoices.Children.Add(swatch);
+        }
+
+        AddSwitch("\uE995", "Volume and brightness", "A slim bar drops down when they change",
+            () => _settings.LevelPopups, v => _settings.LevelPopups = v);
+        AddSwitch("\uEA8F", "Notifications", "Show new Windows notifications in the notch",
+            () => _settings.MirrorNotifications, v => _settings.MirrorNotifications = v);
+        AddSwitch("\uE720", "Microphone and camera light", "A dot while another app is using them",
+            () => _settings.PrivacyDots, v => _settings.PrivacyDots = v);
+        AddSwitch("\uE7F6", "Charging and earbuds", "Plugged in, low battery, headphones connected",
+            () => _settings.DevicePeeks, v => _settings.DevicePeeks = v);
+
+        foreach (var tab in _host.OptionalTabs)
+        {
+            var chip = new ToggleButton
+            {
+                Style = (Style)FindResource("ToggleChip"), Content = tab, IsChecked = !_settings.HiddenTabs.Contains(tab),
+                Margin = new Thickness(0, 0, 2, 4)
+            };
+            chip.Click += (_, _) =>
+            {
+                _settings.HiddenTabs.Remove(tab);
+                if (chip.IsChecked != true) _settings.HiddenTabs.Add(tab);
+                Changed();
+            };
+            TabChoices.Children.Add(chip);
+        }
+    }
+
+    private void AddSwitch(string glyph, string title, string hint, Func<bool> get, Action<bool> set)
+    {
+        if (MomentSwitches.Children.Count > 0) MomentSwitches.Children.Add(new Rectangle { Style = (Style)FindResource("Divider") });
+        var toggle = new ToggleButton { Style = (Style)FindResource("Switch"), IsChecked = get() };
+        toggle.Click += (_, _) =>
+        {
+            set(toggle.IsChecked == true);
+            Changed();
+        };
+        var row = new DockPanel();
+        DockPanel.SetDock(toggle, Dock.Right);
+        row.Children.Add(toggle);
+        row.Children.Add(new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = glyph, Style = (Style)FindResource("Icon"), FontSize = 12, Width = 24, Margin = new Thickness(0, 0, 9, 0),
+                    Foreground = (Brush)FindResource("SubTextBrush")
+                },
+                new StackPanel
+                {
+                    Children =
+                    {
+                        new TextBlock { Text = title, Style = (Style)FindResource("RowTitle") },
+                        new TextBlock { Text = hint, Style = (Style)FindResource("RowHint") }
+                    }
+                }
+            }
+        });
+        MomentSwitches.Children.Add(row);
+    }
+
+    private void RenderScreens()
+    {
+        var screens = Native.Screens();
+        ScreenRow.Visibility = screens.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+        ScreenChoices.Children.Clear();
+        if (screens.Count < 2) return;
+        string current = screens.Any(s => s.Device == _settings.Screen) ? _settings.Screen! : screens[0].Device;
+        for (int i = 0; i < screens.Count; i++)
+        {
+            var screen = screens[i];
+            var chip = Chip(screen.Primary ? "Main" : $"Screen {i + 1}", "NotchScreen", screen.Device == current);
+            chip.Checked += (_, _) =>
+            {
+                _settings.Screen = screen.Primary ? null : screen.Device;
+                Changed();
+            };
+            ScreenChoices.Children.Add(chip);
+        }
+    }
+
+    private static ControlTemplate SwatchTemplate(Color color)
+    {
+        var ring = new FrameworkElementFactory(typeof(Ellipse), "Ring");
+        ring.SetValue(Shape.StrokeProperty, Brushes.White);
+        ring.SetValue(Shape.StrokeThicknessProperty, 0.0);
+        ring.SetValue(WidthProperty, 20.0);
+        ring.SetValue(HeightProperty, 20.0);
+        var dot = new FrameworkElementFactory(typeof(Ellipse));
+        dot.SetValue(Shape.FillProperty, new SolidColorBrush(color));
+        dot.SetValue(WidthProperty, 14.0);
+        dot.SetValue(HeightProperty, 14.0);
+        var grid = new FrameworkElementFactory(typeof(Grid));
+        grid.SetValue(Panel.BackgroundProperty, Brushes.Transparent);
+        grid.AppendChild(ring);
+        grid.AppendChild(dot);
+        var template = new ControlTemplate(typeof(RadioButton)) { VisualTree = grid };
+        template.Triggers.Add(new Trigger
+        {
+            Property = ToggleButton.IsCheckedProperty, Value = true,
+            Setters = { new Setter(Shape.StrokeThicknessProperty, 1.5, "Ring") }
+        });
+        return template;
+    }
+
+    // ---------- About ----------
+
+    private void BuildAbout()
+    {
+        GhostIcon.Source = GhostSprite.Frame(0, GhostEyes.Happy, 0, false);
+        VersionText.Text = $"GhostyNav {Updater.CurrentText}";
+        RenderUpdate();
+    }
+
+    private void RenderUpdate()
+    {
+        if (_updating) return;
+        var update = _host.AvailableUpdate;
+        UpdateButton.Visibility = update != null ? Visibility.Visible : Visibility.Collapsed;
+        UpdateButton.Content = update != null ? $"Update to {update.Version}" : "";
+        if (update != null) UpdateStatus.Text = "A new version is ready";
+        else if (UpdateStatus.Text.Length == 0) UpdateStatus.Text = "Click Check now to look for updates";
+    }
+
+    private void OnAutoUpdateChanged(object sender, RoutedEventArgs e)
+    {
+        _settings.CheckForUpdates = AutoUpdateSwitch.IsChecked == true;
+        _settings.Save();
+    }
+
+    private async void OnCheckUpdates(object sender, RoutedEventArgs e)
+    {
+        CheckButton.IsEnabled = false;
+        UpdateStatus.Text = "Checking…";
+        var update = await _host.CheckForUpdateAsync();
+        CheckButton.IsEnabled = true;
+        UpdateStatus.Text = update == null ? "You have the latest version" : "";
+        RenderUpdate();
+    }
+
+    private async void OnUpdate(object sender, RoutedEventArgs e)
+    {
+        if (_host.AvailableUpdate is not { } update) return;
+        _updating = true;
+        UpdateButton.IsEnabled = CheckButton.IsEnabled = false;
+        using var hold = _host.HoldOpen();
+        var progress = new Progress<double>(p => UpdateStatus.Text = $"Downloading… {p:P0}");
+        string? problem = await Updater.InstallAsync(update, progress);
+        if (problem == null)
+        {
+            UpdateStatus.Text = "Installing, see you in a moment";
+            await Task.Delay(400);
+            Application.Current.Shutdown(); // Setup starts the new version once this one has gone
+            return;
+        }
+        _updating = false;
+        UpdateStatus.Text = problem;
+        UpdateButton.IsEnabled = CheckButton.IsEnabled = true;
+    }
+
+    private void OnRepo(object sender, RoutedEventArgs e) => Open("https://github.com/TheCidSama/GhostyNav");
+
+    // ---------- Shared ----------
+
+    private RadioButton Chip(string text, string group, bool isChecked) => new()
+    {
+        Style = (Style)FindResource("Chip"), Content = text, GroupName = group, IsChecked = isChecked
+    };
+
     private void OnBack(object sender, RoutedEventArgs e) => _host.CloseSettings();
 
-    private void OnGetKey(object sender, RoutedEventArgs e)
+    private static void Open(string url)
     {
-        try { Process.Start(new ProcessStartInfo("https://aistudio.google.com/apikey") { UseShellExecute = true }); }
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
             Debug.WriteLine($"Couldn't open the browser: {ex.Message}");

@@ -31,4 +31,11 @@ public interface IIslandHost
     /// <summary>Settings opens from Controls, like a page beneath it, and returns there.</summary>
     void OpenSettings();
     void CloseSettings();
+    /// <summary>Settings changed that the notch itself shows (size, screen, tabs, keys...).</summary>
+    void ApplySettings();
+    /// <summary>The tabs that can be hidden from the tab bar.</summary>
+    IEnumerable<string> OptionalTabs { get; }
+    /// <summary>A newer version found by the last update check.</summary>
+    Services.UpdateInfo? AvailableUpdate { get; }
+    Task<Services.UpdateInfo?> CheckForUpdateAsync();
 }

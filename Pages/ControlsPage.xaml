@@ -143,7 +143,7 @@
             <Grid Height="28" Margin="0,8,0,0">
                 <Slider x:Name="VolumeSlider" Style="{StaticResource PillSlider}" />
                 <TextBlock x:Name="VolumeIcon" Style="{StaticResource Icon}" Text="&#xE767;" FontSize="11"
-                           Foreground="{StaticResource OnAccentBrush}" HorizontalAlignment="Left" Margin="10,0,0,0"
+                           Foreground="{DynamicResource OnAccentBrush}" HorizontalAlignment="Left" Margin="10,0,0,0"
                            IsHitTestVisible="False" />
                 <TextBlock x:Name="VolumeText" FontSize="10.5" FontWeight="SemiBold" HorizontalAlignment="Right"
                            VerticalAlignment="Center" Margin="0,0,12,0" IsHitTestVisible="False" />

@@ -22,6 +22,7 @@ public partial class App : Application
         RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
 
         Services.Store.MoveFromOldName(); // before anything reads settings
+        Services.Theme.Apply(Services.AppSettings.Load().Accent);
         base.OnStartup(e);
         MainWindow = new MainWindow();
         MainWindow.Show();

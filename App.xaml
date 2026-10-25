@@ -136,8 +136,8 @@
             </Setter>
         </Style>
         <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource FlatButton}">
-            <Setter Property="Background" Value="{StaticResource AccentBrush}" />
-            <Setter Property="Foreground" Value="{StaticResource OnAccentBrush}" />
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
         </Style>
 
         <!-- Large tile used on the Power tab: borderless and dim, a shade off the black island,
@@ -194,8 +194,8 @@
                                 <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Bg" Property="Background" Value="{StaticResource AccentDimBrush}" />
-                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource AccentDimBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -224,8 +224,38 @@
                                 <Setter TargetName="Bg" Property="Background" Value="#2A2A2F" />
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Bg" Property="Background" Value="{StaticResource AccentBrush}" />
-                                <Setter Property="Foreground" Value="{StaticResource OnAccentBrush}" />
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- A chip that toggles on and off by itself (which tabs to show) -->
+        <Style x:Key="ToggleChip" TargetType="ToggleButton">
+            <Setter Property="Foreground" Value="{StaticResource SubTextBrush}" />
+            <Setter Property="Background" Value="#202024" />
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="9,3" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="10"
+                                Padding="{TemplateBinding Padding}" Margin="2,0">
+                            <ContentPresenter HorizontalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#2A2A2F" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource AccentDimBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -251,8 +281,8 @@
                                 <Setter TargetName="Bg" Property="Background" Value="{StaticResource CardHoverBrush}" />
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Bg" Property="Background" Value="{StaticResource AccentBrush}" />
-                                <Setter Property="Foreground" Value="{StaticResource OnAccentBrush}" />
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="Bg" Property="RenderTransform">
@@ -285,8 +315,8 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Track" Property="Background" Value="{StaticResource AccentBrush}" />
-                                <Setter TargetName="Knob" Property="Fill" Value="{StaticResource OnAccentBrush}" />
+                                <Setter TargetName="Track" Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter TargetName="Knob" Property="Fill" Value="{DynamicResource OnAccentBrush}" />
                                 <Setter TargetName="Knob" Property="HorizontalAlignment" Value="Right" />
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -339,7 +369,7 @@
                                     <RepeatButton Focusable="False" IsHitTestVisible="False">
                                         <RepeatButton.Template>
                                             <ControlTemplate TargetType="RepeatButton">
-                                                <Border Background="{StaticResource AccentBrush}" CornerRadius="12" MinWidth="24" />
+                                                <Border Background="{DynamicResource AccentBrush}" CornerRadius="12" MinWidth="24" />
                                             </ControlTemplate>
                                         </RepeatButton.Template>
                                     </RepeatButton>
@@ -372,8 +402,8 @@
         <!-- Dark text field. Placeholder text comes from Tag. -->
         <Style x:Key="Field" TargetType="TextBox">
             <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-            <Setter Property="CaretBrush" Value="{StaticResource AccentBrush}" />
-            <Setter Property="SelectionBrush" Value="{StaticResource AccentBrush}" />
+            <Setter Property="CaretBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="SelectionBrush" Value="{DynamicResource AccentBrush}" />
             <Setter Property="Background" Value="{StaticResource FieldBrush}" />
             <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
             <Setter Property="FontSize" Value="12.5" />
@@ -412,8 +442,8 @@
         <!-- Field look for secrets. PasswordBox has no Text to trigger on, so its placeholder lives in the page. -->
         <Style x:Key="PasswordField" TargetType="PasswordBox">
             <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-            <Setter Property="CaretBrush" Value="{StaticResource AccentBrush}" />
-            <Setter Property="SelectionBrush" Value="{StaticResource AccentBrush}" />
+            <Setter Property="CaretBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="SelectionBrush" Value="{DynamicResource AccentBrush}" />
             <Setter Property="Background" Value="{StaticResource FieldBrush}" />
             <Setter Property="FontSize" Value="12.5" />
             <Setter Property="Height" Value="34" />
@@ -485,7 +515,7 @@
                                 <Setter TargetName="Bg" Property="Background" Value="#18181B" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Bg" Property="Background" Value="{StaticResource AccentDimBrush}" />
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource AccentDimBrush}" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Bg" Property="Padding" Value="8,8,8,2" />

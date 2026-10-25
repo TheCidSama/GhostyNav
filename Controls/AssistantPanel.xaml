@@ -59,6 +59,14 @@
                                       Visibility="Collapsed">
                             <TextBlock x:Name="Answer" FontSize="13.5" TextWrapping="Wrap" LineHeight="20" Foreground="#E9E4FF" />
                         </ScrollViewer>
+                        <Button x:Name="CopyButton" Style="{StaticResource FlatButton}" Height="22" Padding="8,0" FontSize="10.5"
+                                Margin="-8,6,0,0" HorizontalAlignment="Left" Background="Transparent"
+                                Foreground="{StaticResource Lavender}" Visibility="Collapsed" Click="OnCopy">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock x:Name="CopyIcon" Style="{StaticResource Icon}" Text="&#xE8C8;" FontSize="10" Margin="0,1,6,0" />
+                                <TextBlock x:Name="CopyText" Text="Copy" />
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
                 </StackPanel>
             </Grid>

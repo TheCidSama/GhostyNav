@@ -14,7 +14,37 @@ public sealed class AudioService
     private static readonly PropertyKey FriendlyName = new(new Guid("a45c254e-df1c-4efd-8020-67d146a850e0"), 14);
 
     private IAudioEndpointVolume? _endpoint;
-    private Guid _context = Guid.Empty;
+    // Tags our own changes, so the volume pop-up only answers the keyboard and other apps.
+    private Guid _context = new("6f9b4b2e-3c1d-4f0a-9a57-47686f737479");
+    private VolumeCallback? _callback;
+    private DeviceCallback? _devices;
+    private IMMDeviceEnumerator? _enumerator;
+
+    /// <summary>
+    /// The volume or mute changed from outside GhostyNav (volume keys, the taskbar flyout).
+    /// Raised on a background thread: (volume 0..100, muted).
+    /// </summary>
+    public event Action<double, bool>? ExternalChange;
+
+    /// <summary>Starts reporting <see cref="ExternalChange"/>, following the default device as it changes.</summary>
+    public void Watch()
+    {
+        if (_devices != null) return;
+        try
+        {
+            _enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorCom();
+            _devices = new DeviceCallback(() => ExternalDeviceSwitch?.Invoke());
+            _enumerator.RegisterEndpointNotificationCallback(_devices);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Can't watch audio devices: {ex.Message}");
+        }
+        Refresh();
+    }
+
+    /// <summary>The default output device changed; call <see cref="Refresh"/> on the UI thread. Background thread.</summary>
+    public event Action? ExternalDeviceSwitch;
 
     public string DeviceId { get; private set; } = "";
     public string DeviceName { get; private set; } = "";
@@ -28,7 +58,13 @@ public sealed class AudioService
             Marshal.ThrowExceptionForHR(enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia, out var device));
             var iid = typeof(IAudioEndpointVolume).GUID;
             Marshal.ThrowExceptionForHR(device.Activate(ref iid, CLSCTX_ALL, 0, out object endpoint));
+            if (_callback != null && _endpoint != null) _endpoint.UnregisterControlChangeNotify(_callback);
             _endpoint = (IAudioEndpointVolume)endpoint;
+            if (_devices != null)
+            {
+                _callback ??= new VolumeCallback(this);
+                _endpoint.RegisterControlChangeNotify(_callback);
+            }
             device.GetId(out string id);
             DeviceId = id;
             DeviceName = ReadName(device);
@@ -115,7 +151,57 @@ public sealed class AudioService
     private static extern int PropVariantClear(ref PropVariant pv);
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct PropertyKey(Guid fmtid, int pid)
+    private struct VolumeNotification
+    {
+        public Guid Context;
+        public int Muted;
+        public float MasterVolume;
+    }
+
+    // Callbacks Windows calls into: COM can only reach public types.
+    [ComVisible(true)]
+    public sealed class VolumeCallback(AudioService owner) : IAudioEndpointVolumeCallback
+    {
+        public int OnNotify(nint data)
+        {
+            var n = Marshal.PtrToStructure<VolumeNotification>(data);
+            if (n.Context != owner._context) owner.ExternalChange?.Invoke(n.MasterVolume * 100, n.Muted != 0);
+            return 0;
+        }
+    }
+
+    [ComVisible(true)]
+    public sealed class DeviceCallback(Action defaultChanged) : IMMNotificationClient
+    {
+        public int OnDeviceStateChanged(string id, int state) => 0;
+        public int OnDeviceAdded(string id) => 0;
+        public int OnDeviceRemoved(string id) => 0;
+        public int OnDefaultDeviceChanged(int flow, int role, string? id)
+        {
+            if (flow == eRender && role == eMultimedia) defaultChanged();
+            return 0;
+        }
+        public int OnPropertyValueChanged(string id, PropertyKey key) => 0;
+    }
+
+    [ComImport, Guid("657804FA-D6AD-4496-8A60-352752AF4F89"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    public interface IAudioEndpointVolumeCallback
+    {
+        [PreserveSig] int OnNotify(nint data);
+    }
+
+    [ComImport, Guid("7991EEC9-7E89-4D85-8390-6C703CEC60C0"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    public interface IMMNotificationClient
+    {
+        [PreserveSig] int OnDeviceStateChanged([MarshalAs(UnmanagedType.LPWStr)] string id, int state);
+        [PreserveSig] int OnDeviceAdded([MarshalAs(UnmanagedType.LPWStr)] string id);
+        [PreserveSig] int OnDeviceRemoved([MarshalAs(UnmanagedType.LPWStr)] string id);
+        [PreserveSig] int OnDefaultDeviceChanged(int flow, int role, [MarshalAs(UnmanagedType.LPWStr)] string? id);
+        [PreserveSig] int OnPropertyValueChanged([MarshalAs(UnmanagedType.LPWStr)] string id, PropertyKey key);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct PropertyKey(Guid fmtid, int pid)
     {
         public Guid fmtid = fmtid;
         public int pid = pid;
@@ -141,6 +227,9 @@ public sealed class AudioService
     {
         [PreserveSig] int EnumAudioEndpoints(int dataFlow, int stateMask, out IMMDeviceCollection devices);
         [PreserveSig] int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice endpoint);
+        [PreserveSig] int GetDevice([MarshalAs(UnmanagedType.LPWStr)] string id, out IMMDevice device);
+        [PreserveSig] int RegisterEndpointNotificationCallback(IMMNotificationClient client);
+        [PreserveSig] int UnregisterEndpointNotificationCallback(IMMNotificationClient client);
     }
 
     [ComImport, Guid("0BD7A1BE-7A1A-44DB-8397-CC5392387B5E"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -170,8 +259,8 @@ public sealed class AudioService
     [ComImport, Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     private interface IAudioEndpointVolume
     {
-        [PreserveSig] int RegisterControlChangeNotify(nint notify);
-        [PreserveSig] int UnregisterControlChangeNotify(nint notify);
+        [PreserveSig] int RegisterControlChangeNotify(IAudioEndpointVolumeCallback notify);
+        [PreserveSig] int UnregisterControlChangeNotify(IAudioEndpointVolumeCallback notify);
         [PreserveSig] int GetChannelCount(out uint count);
         [PreserveSig] int SetMasterVolumeLevel(float levelDb, ref Guid context);
         [PreserveSig] int SetMasterVolumeLevelScalar(float level, ref Guid context);

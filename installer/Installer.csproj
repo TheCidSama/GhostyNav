@@ -19,7 +19,7 @@
     <AssemblyTitle>GhostyNav Setup</AssemblyTitle>
     <Company>GhostyNav</Company>
     <Copyright>Copyright (c) 2026 GhostyNav contributors</Copyright>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <DebugType>none</DebugType>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
