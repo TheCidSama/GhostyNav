@@ -18,7 +18,7 @@
   <a href="https://github.com/TheCidSama/GhostyNav/releases/latest"><img src="https://img.shields.io/github/v/release/TheCidSama/GhostyNav?color=a78bfa" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-a78bfa" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6" alt="Windows 10 and 11">
-  <img src="https://img.shields.io/badge/RAM-~27%20MB%20idle-2ea44f" alt="About 27 MB of RAM when idle">
+  <img src="https://img.shields.io/badge/RAM-~24%20MB%20idle-2ea44f" alt="About 24 MB of RAM when idle">
   <img src="https://img.shields.io/badge/AI-Gemini-8E75B2?logo=googlegemini&logoColor=white" alt="Powered by Gemini">
 </p>
 
@@ -30,27 +30,33 @@
 
 GhostyNav puts a small black notch at the top centre of your screen, flush with the edge like a
 MacBook's. Click it and it springs open into a panel of tabs. Hover it while music plays and a mini
-player drops down. Hold <kbd>Ctrl</kbd>+<kbd>Alt</kbd> and a pixel-art ghost listens, looks at whatever
-you circle on screen, and gets things done. All of that in about 27 MB of memory.
+player drops down. Press the volume keys and a slim bar slides out. Drop a file on it to keep it for
+later. Hold <kbd>Ctrl</kbd>+<kbd>Alt</kbd> and a pixel-art ghost listens, looks at whatever you circle on
+screen, and gets things done. All of that in about 24 MB of memory.
 
 ## Highlights
 
-- **Talk to it.** Hold <kbd>Ctrl</kbd>+<kbd>Alt</kbd>, speak, let go. It opens apps, searches YouTube and
-  the web, answers questions and sets up reminders, out loud if you like.
+- **Talk to it.** Hold <kbd>Ctrl</kbd>+<kbd>Alt</kbd>, speak, let go. It opens apps, searches the web,
+  plays and pauses music, sets the volume, flips Wi-Fi or dark mode, starts timers, keeps your to-dos,
+  answers questions and types for you, out loud if you like.
 - **Point at things.** Circle anything on screen with a neon trail and ask about it.
+- **A notch that keeps you posted.** Volume and brightness bars, notifications, your next meeting,
+  a light when an app uses your microphone or camera, and a hello when your earbuds connect.
+- **Drop shelf.** Drag files onto the notch to park them, drag them out wherever they're needed.
 - **Control centre.** Wi-Fi, Bluetooth, sound output, Night Light, dark mode and volume, one click away.
 - **Now playing.** Album art, a glow in the colours of the cover and a wavy timeline you can drag,
   from Spotify or any media app.
-- **Your day.** Clock, weather, the week ahead, a timer and a to-do list.
+- **Your day.** Clock, weather, the week and your calendar, a timer with focus sessions, and a to-do list.
 - **System stats.** Live CPU, GPU and RAM gauges, the busiest apps and an internet speed test.
-- **Clipboard history.** Text, links, images and files, pasted back with <kbd>Enter</kbd>.
+- **Clipboard history.** Text, links, images and files, encrypted, pasted back with <kbd>Enter</kbd>.
 - **App launcher.** Fuzzy search over everything in your Start menu.
-- **Light.** About 27 MB of memory and no CPU to speak of while it waits.
+- **Yours.** Pick the notch's size, its accent colour, its screen, its tabs and your talk keys.
+- **Light.** About 24 MB of memory and no CPU to speak of while it waits.
 
 ## Install
 
 1. Download **[GhostyNav-Setup.exe](https://github.com/TheCidSama/GhostyNav/releases/latest/download/GhostyNav-Setup.exe)**
-   (6.4 MB) from the [latest release](https://github.com/TheCidSama/GhostyNav/releases/latest).
+   from the [latest release](https://github.com/TheCidSama/GhostyNav/releases/latest).
 2. Run it and click **Install**. Setup:
    - installs GhostyNav just for you, with no admin rights needed
    - adds it to the Start menu and to your **PATH**, so typing `ghostynav` in any new terminal starts it
@@ -62,9 +68,10 @@ you circle on screen, and gets things done. All of that in about 27 MB of memory
 The installer isn't code-signed yet, so Windows SmartScreen may say it protected your PC. Click
 **More info**, then **Run anyway**.
 
-To **update**, run the newer Setup; your settings stay. To **uninstall**, go to **Settings › Apps ›
-Installed apps › GhostyNav › Uninstall**. It removes the app, its shortcuts and its PATH entry, and
-only deletes your settings if you ask it to.
+**Updates** arrive by themselves: GhostyNav looks for a new version once a day and tells you in the
+notch; one click in **Settings › About** installs it and keeps your settings. To **uninstall**, go to
+**Settings › Apps › Installed apps › GhostyNav › Uninstall**. It removes the app, its shortcuts and its
+PATH entry, and only deletes your settings if you ask it to.
 
 <details>
 <summary>Installing from a script</summary>
@@ -110,49 +117,79 @@ It blinks, its hem ripples, and it reads its replies aloud in a female or male v
 2. **Point if you like.** While you hold the keys, your cursor leaves a neon lavender trail. Loop it
    around anything on screen (a word, an error message, a photo, a chart) and that area goes along
    with your question.
-3. **Let go.** GhostyNav does what you asked, or answers in a card that tidies itself away after a
-   few seconds.
+3. **Let go.** GhostyNav does what you asked, or answers in a card with a **Copy** button that tidies
+   itself away after a few seconds.
 
 | You say | GhostyNav |
 | --- | --- |
 | "Open Spotify" | opens the app |
-| "Search YouTube for lo-fi beats" | opens YouTube results in your browser |
-| "Look up train times to Kyoto" | searches the web |
-| "Open github.com" | opens the site |
+| "Pause the music" / "Next song" | controls whatever is playing |
+| "Volume to 30" / "Mute" | sets the sound |
+| "Turn on dark mode and switch off Bluetooth" | flips Wi-Fi, Bluetooth, dark mode or Night Light |
+| "Set a timer for 10 minutes" / "Start a focus session" | runs the timer, or 25-minute focus rounds with breaks |
+| "Add milk to my to-dos" / "I bought the milk" | adds and ticks off to-dos |
+| "What's my next meeting?" | reads your calendar |
+| "Search YouTube for lo-fi beats" / "Look up train times to Kyoto" | searches in your browser |
 | *(circle a word)* "What does this mean?" | explains it in a sentence or three |
 | *(circle an error)* "How do I fix this?" | tells you, using what it sees |
+| "Write a note to Sam saying I'll be late" | types it into the app you're using |
+| "Copy that" | copies its last answer |
 | "Remind me to stretch every day at 3" | sets up a reminder |
 | "Open Spotify every weekday at 9" | sets up a routine that runs on its own |
-| "What routines do I have?" / "Delete the stretch one" | reads or changes your routines |
+
+**It remembers the conversation** for a few minutes, so "and tomorrow?" or "copy that" follow on
+from what you just asked.
 
 **Circled something but not sure what to ask?** Let go without speaking. The area stays highlighted
-and the ghost waits; hold <kbd>Ctrl</kbd>+<kbd>Alt</kbd> again within a minute and say what you want.
+and the ghost waits; hold the keys again within a minute and say what you want.
+
+**It checks before acting on what it reads.** When a request came with a circled area and would open
+a website or type text, the card asks first, with **Go ahead** and **Cancel**.
 
 **Routines** are reminders and actions the assistant schedules for you: once, every day, on weekdays,
-on chosen days, or every few minutes. Reminders drop down from the notch; actions just happen. You
-can see and delete every routine in Settings.
+on chosen days, or every few minutes. You can see and delete every routine in Settings.
+
+**Prefer other keys?** Choose <kbd>Ctrl</kbd>+<kbd>Win</kbd> or <kbd>Alt</kbd>+<kbd>Win</kbd> in Settings.
 
 ## The notch
+
+### Closed
+
+- **Now playing:** album art and dancing bars in the colours of the cover.
+- **Mini player:** hover the notch, or skip a track, and a player drops down.
+- **Volume and brightness:** a slim bar slides out of the notch when you change them.
+- **Notifications:** new Windows notifications drop down from the notch.
+- **Your calendar:** a heads-up five minutes before each meeting.
+- **Microphone and camera light:** an orange dot while another app uses your microphone, a green one
+  for the camera.
+- **Charging and earbuds:** plugging in, low battery, and Bluetooth headphones connecting, with their
+  battery level.
+- **Timer and focus:** the countdown shows in the notch; breaks count down in green.
+- **Drop shelf:** drag files onto the notch to keep them there. Hover to see them, drag them out into a
+  folder, an email or a chat, double-click to open. The shelf only remembers where the files are, so it
+  takes no space.
+- **Reminders:** routines drop down when they're due.
+- **Out of the way:** it steps aside for fullscreen games and videos, and stays out of Alt+Tab and the taskbar.
+
+### Open
 
 Click the notch to open it. It resizes to fit each tab, and you can switch tabs by clicking, by
 dragging sideways, with a two-finger swipe, with the mouse wheel or from the keyboard.
 
 | Tab | What's in it |
 | --- | --- |
-| **Controls** | Wi-Fi, Bluetooth, sound output, Night Light, dark mode and volume, plus the now-playing card glowing in the colours of the cover, with a wavy timeline you can drag. Offers to open Spotify when nothing is playing. The gear tile opens **Settings**: your Gemini key, the listening glow, the voice and your routines. |
-| **Today** | A big clock, the weather, the week at a glance, a timer with quick presets and a to-do list that splashes green when you tick things off. |
+| **Controls** | Wi-Fi, Bluetooth, sound output, Night Light, dark mode and volume, plus the now-playing card glowing in the colours of the cover, with a wavy timeline you can drag. Offers to open Spotify when nothing is playing. |
+| **Today** | A big clock, the weather, the week with your next calendar event, a timer with presets and focus sessions, and a to-do list that splashes green when you tick things off. |
 | **Stats** | CPU, GPU and RAM gauges that fill up as you open the tab, disk, network, uptime, the apps using the most, and a speed test whose numbers count up live. |
 | **Clipboard** | Your clipboard history (text, links, images and files) with search, filters and pins. <kbd>Enter</kbd> pastes straight into the app you were using. |
 | **Apps** | Every app in your Start menu with its icon, fuzzy search, favourites and recents, and a web search when nothing matches. |
 | **Power** | Lock, sleep, restart and shut down. Restart and shut down ask for a second click. |
 
-Closed, the notch still keeps you company:
+The gear tile in **Controls** opens **Settings**:
 
-- **Now playing:** album art and dancing bars in the colours of the cover.
-- **Mini player:** hover the notch, or skip a track, and a player drops down.
-- **Timer:** a running countdown shows in the notch.
-- **Reminders:** routines drop down when they're due.
-- **Out of the way:** it steps aside for fullscreen games and videos, and stays out of Alt+Tab and the taskbar.
+- **Assistant:** your Gemini key, talk keys, the listening glow, the voice and your routines.
+- **Notch:** its size, accent colour and screen, which moments it shows, and which tabs you keep.
+- **About:** your version, updates, and a link here.
 
 Right-click the notch to turn **Start with Windows** on or off, or to exit.
 
@@ -173,15 +210,18 @@ Right-click the notch to turn **Start with Windows** on or off, or to exit.
 
 | What GhostyNav is doing | Memory | CPU |
 |---|---|---|
-| Closed, waiting at the top of the screen | **27 MB** | 0.07 % |
-| Open, moving between all seven pages | 45 to 58 MB | under 0.5 % with the live Stats gauges |
-| Closed again after opening every page | 50 MB | 0.00 % |
+| Closed, waiting at the top of the screen | **24 MB** | 0.03 % |
+| Open, moving between all seven pages | 52 to 60 MB | under 0.4 % with the live Stats gauges |
+| Closed again after opening every page | 59 MB | 0.1 % |
 
 <sub>Measured on Windows 11 with a Ryzen 5 8600G. Memory is the figure in Task Manager's Memory
 column; CPU is the share of the whole machine.</sub>
 
 Pages are only built the first time you open them, nothing is redrawn while the notch is idle, and
-stats only update while you're looking at them.
+stats only update while you're looking at them. Volume, devices, the microphone light and the shelf
+all wait for Windows to tell them something changed rather than checking. Notifications are the
+exception: Windows only announces them to Store apps, so GhostyNav takes a quick local look every
+few seconds (switch it off in Settings if you don't need it).
 
 ## Privacy
 
@@ -189,16 +229,17 @@ No accounts, no analytics, no telemetry. This is everything that leaves your PC:
 
 | When | Sent to | What |
 | --- | --- | --- |
-| While you hold <kbd>Ctrl</kbd>+<kbd>Alt</kbd> | Google Gemini | Your voice, for live transcription |
-| When you let go after speaking | Google Gemini | What you said, any areas you circled, the time, your routines and the names of your apps |
+| While you hold the talk keys | Google Gemini | Your voice, for live transcription |
+| When you let go after speaking | Google Gemini | What you said, any areas you circled, the time, your routines, to-dos and upcoming calendar events, the names of your apps, and your last few exchanges |
 | When you click the weather | Open-Meteo | Your approximate location |
 | When you run the speed test | Cloudflare | Test data only |
+| Once a day, if updates are on | GitHub | A request for the latest version number |
 
-The microphone is only on while you hold the keys, and if you let go without speaking, no question
-or circled area is sent. Your API key and location are encrypted on your PC with Windows' own
-protection. Clipboard history stays on your PC too, as plain files you can clear from the Clipboard
-tab; copies that password managers mark as private are never saved. The assistant opens apps and
-links without asking first, so keep an eye on what you circle.
+Notifications, your calendar and the microphone light are read on your PC and never leave it. The
+microphone is only on while you hold the keys, and if you let go without speaking, no question or
+circled area is sent. Your API key, location and clipboard history are encrypted on your PC with
+Windows' own protection, so only your Windows account can read them; copies that password managers
+mark as private are never saved.
 
 ## Build from source
 

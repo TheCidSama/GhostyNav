@@ -1,0 +1,31 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.9.0.schema.json
+
+PackageIdentifier: TheCidSama.GhostyNav
+PackageVersion: 1.2.0
+MinimumOSVersion: 10.0.19041.0
+InstallerType: exe
+Scope: user
+InstallModes:
+- interactive
+- silent
+- silentWithProgress
+InstallerSwitches:
+  Silent: /quiet
+  SilentWithProgress: /quiet
+UpgradeBehavior: install
+Commands:
+- ghostynav
+Dependencies:
+  PackageDependencies:
+  - PackageIdentifier: Microsoft.DotNet.DesktopRuntime.10
+ProductCode: GhostyNav
+AppsAndFeaturesEntries:
+- DisplayName: GhostyNav
+  Publisher: GhostyNav contributors
+  ProductCode: GhostyNav
+Installers:
+- Architecture: x64
+  InstallerUrl: https://github.com/TheCidSama/GhostyNav/releases/download/v1.2.0/GhostyNav-Setup.exe
+  InstallerSha256: 8FF7A81968518C3D7C946ADF2C45F458B34A946F0100826F11E3D80121E5964B
+ManifestType: installer
+ManifestVersion: 1.9.0

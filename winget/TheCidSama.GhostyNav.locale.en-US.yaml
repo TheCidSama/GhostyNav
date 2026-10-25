@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.9.0.schema.json
+
+PackageIdentifier: TheCidSama.GhostyNav
+PackageVersion: 1.2.0
+PackageLocale: en-US
+Publisher: GhostyNav contributors
+PublisherUrl: https://github.com/TheCidSama
+PublisherSupportUrl: https://github.com/TheCidSama/GhostyNav/issues
+Author: TheCidSama
+PackageName: GhostyNav
+PackageUrl: https://github.com/TheCidSama/GhostyNav
+License: MIT
+LicenseUrl: https://github.com/TheCidSama/GhostyNav/blob/main/LICENSE
+ShortDescription: A Dynamic Island style notch for Windows, with a pixel-ghost voice assistant.
+Description: |-
+  GhostyNav puts a small notch at the top of your screen. Click it for a control centre, media
+  player, calendar and timer, system stats, clipboard history and app launcher. Closed, it shows
+  volume and brightness, notifications, meetings, a microphone and camera light, and a shelf for
+  files. Hold Ctrl+Alt to talk to a Gemini-powered assistant that can see what you circle on
+  screen. It uses about 24 MB of memory while idle.
+Moniker: ghostynav
+Tags:
+- dynamic-island
+- notch
+- widgets
+- voice-assistant
+- gemini
+- media-controls
+- clipboard-manager
+- app-launcher
+- productivity
+- customization
+ReleaseNotesUrl: https://github.com/TheCidSama/GhostyNav/releases/tag/v1.2.0
+ManifestType: defaultLocale
+ManifestVersion: 1.9.0
