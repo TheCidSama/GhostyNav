@@ -621,7 +621,7 @@ public partial class MainWindow : Window, IIslandHost, IAssistantView
     {
         if (_peekCard == null)
         {
-            _peekCard = new MediaCard(_media, chromeless: true);
+            _peekCard = new MediaCard(_media, chromeless: true, glowHost: NotchGlow);
             _shelfView = new ShelfView(_shelf);
             _hoverPeek.Children.Add(_peekCard);
             _hoverPeek.Children.Add(_shelfView);

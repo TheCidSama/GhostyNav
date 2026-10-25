@@ -16,11 +16,20 @@ public partial class MediaCard : UserControl
     private double? _seekFraction; // set while the user drags the seek bar
     private readonly double _glowStrength;
     private ImageSource? _glowFor; // the cover the glow was made from
+    private readonly Border _glow;
+    private readonly bool _sharedGlow;
+    private double _glowOpacity;
 
-    public MediaCard(MediaService media, bool chromeless = false)
+    /// <param name="glowHost">
+    /// Where to paint the cover's glow instead of this card's own rectangle: the notch, so the colour
+    /// fills its whole shape, corners and shoulders included. Shown only while the card is active.
+    /// </param>
+    public MediaCard(MediaService media, bool chromeless = false, Border? glowHost = null)
     {
         InitializeComponent();
         _media = media;
+        _glow = glowHost ?? Glow;
+        _sharedGlow = glowHost != null;
         if (chromeless)
         {
             // Inside the peek the island itself is the card.
@@ -47,6 +56,7 @@ public partial class MediaCard : UserControl
         {
             _tick.Stop();
             Progress.SetMoving(false);
+            RenderGlow(); // a glow on the notch goes with the card
         }
     }
 
@@ -81,18 +91,27 @@ public partial class MediaCard : UserControl
     /// <summary>The cover's colours, stretched smoothly into a soft halo; it fades across when the song changes.</summary>
     private void RenderGlow()
     {
-        if (ReferenceEquals(_glowFor, _media.ArtGlow)) return;
-        _glowFor = _media.ArtGlow;
-        if (_media.ArtGlow is not { } glow)
+        bool newCover = !ReferenceEquals(_glowFor, _media.ArtGlow);
+        if (newCover)
         {
-            Glow.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, TimeSpan.FromMilliseconds(300)));
-            return;
+            _glowFor = _media.ArtGlow;
+            if (_media.ArtGlow is { } glow)
+            {
+                var brush = new ImageBrush(glow) { Stretch = Stretch.Fill };
+                RenderOptions.SetBitmapScalingMode(brush, BitmapScalingMode.HighQuality); // a smooth blend, not blocks
+                brush.Freeze();
+                _glow.Background = brush;
+            }
         }
-        var brush = new ImageBrush(glow) { Stretch = Stretch.Fill };
-        RenderOptions.SetBitmapScalingMode(brush, BitmapScalingMode.HighQuality); // a smooth blend, not blocks
-        brush.Freeze();
-        Glow.Background = brush;
-        Glow.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, _glowStrength, TimeSpan.FromMilliseconds(450)));
+
+        double target = _glowFor != null && (_active || !_sharedGlow) ? _glowStrength : 0;
+        if (!newCover && target == _glowOpacity) return;
+        // A new cover fades in from nothing; otherwise the glow fades from where it is.
+        var fade = target > 0 && newCover
+            ? new System.Windows.Media.Animation.DoubleAnimation(0, target, TimeSpan.FromMilliseconds(450))
+            : new System.Windows.Media.Animation.DoubleAnimation(target, TimeSpan.FromMilliseconds(target > 0 ? 300 : 160));
+        _glow.BeginAnimation(OpacityProperty, fade);
+        _glowOpacity = target;
     }
 
     private void RenderProgress()

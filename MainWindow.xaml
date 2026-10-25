@@ -28,6 +28,18 @@
             <Path x:Name="Shape" Fill="{StaticResource IslandBrush}" />
 
             <Grid x:Name="Clipper">
+                <!-- The mini player's glow in the cover's colours, filling the whole notch (the outline
+                     clips it), spreading out from where the cover sits -->
+                <Border x:Name="NotchGlow" IsHitTestVisible="False" Opacity="0">
+                    <Border.OpacityMask>
+                        <RadialGradientBrush Center="0.12,0.5" GradientOrigin="0.12,0.5" RadiusX="0.95" RadiusY="1.6">
+                            <GradientStop Color="#FF000000" Offset="0" />
+                            <GradientStop Color="#8C000000" Offset="0.45" />
+                            <GradientStop Color="#00000000" Offset="1" />
+                        </RadialGradientBrush>
+                    </Border.OpacityMask>
+                </Border>
+
                 <!-- Compact "live activity": album art + audio bars, or a running timer.
                      Side margins clear the sloped sides at mid-height. -->
                 <Grid x:Name="Compact" Height="24" VerticalAlignment="Top" Margin="21,0,22,0">
