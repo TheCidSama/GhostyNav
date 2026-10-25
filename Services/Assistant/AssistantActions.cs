@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 namespace GhostyNav.Services.Assistant;
 
@@ -236,10 +237,8 @@ public static class AssistantActions
                     : Failed();
 
             case "search_web":
-                string query = call.Arg("query");
-                return Open("https://www.google.com/search?q=" + Uri.EscapeDataString(query))
-                    ? new ActionResult("\uE721", $"Searching for “{query}”")
-                    : Failed();
+                var (searchUrl, label) = WebSearch(call.Arg("query"), call.Arg("site"));
+                return Open(searchUrl) ? new ActionResult("\uE721", label) : Failed();
 
             case "open_website":
                 string url = call.Arg("url").Trim();
@@ -376,6 +375,69 @@ public static class AssistantActions
         var d when d.StartsWith("sun") => DayOfWeek.Sunday,
         _ => null
     };
+
+    private static readonly Regex Operator = new(@"\b(?:site|intitle|inurl|intext|filetype):(\S+)", RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// The search to open: the named site's own search when GhostyNav knows it (Amazon, Flipkart...),
+    /// else Google. The query is cleaned of what a model tends to add but a person wouldn't type:
+    /// quotation marks and operators like site:, which show up in the search box as noise.
+    /// </summary>
+    public static (string Url, string Label) WebSearch(string query, string site)
+    {
+        site = site.Trim().ToLowerInvariant();
+        if (site.Length == 0 && Regex.Match(query, @"\bsite:(\S+)", RegexOptions.IgnoreCase) is { Success: true } m)
+            site = m.Groups[1].Value.ToLowerInvariant();
+        // Only fixed addresses: the model picks a site by name, it never supplies a URL here.
+        string name = site.Replace("www.", "").Split('.')[0];
+
+        query = Operator.Replace(query, "");
+        query = Regex.Replace(query, "[\"“”„]", "");
+        // "amazon Milton wallet" with Amazon as the site: the name has done its job.
+        if (name.Length > 0) query = Regex.Replace(query, $@"^\s*{Regex.Escape(name)}\b|\b(on\s+)?{Regex.Escape(name)}\s*$", "", RegexOptions.IgnoreCase);
+        query = Regex.Replace(query, @"\s+", " ").Trim();
+        string q = Uri.EscapeDataString(query);
+
+        (string Name, string Url)? known = name switch
+        {
+            "" or "google" => null,
+            "amazon" => ("Amazon", $"https://www.{AmazonHost(site)}/s?k={q}"),
+            "flipkart" => ("Flipkart", $"https://www.flipkart.com/search?q={q}"),
+            "ebay" => ("eBay", $"https://www.ebay.com/sch/i.html?_nkw={q}"),
+            "wikipedia" => ("Wikipedia", $"https://en.wikipedia.org/w/index.php?search={q}"),
+            "reddit" => ("Reddit", $"https://www.reddit.com/search/?q={q}"),
+            "github" => ("GitHub", $"https://github.com/search?q={q}"),
+            "youtube" => ("YouTube", $"https://www.youtube.com/results?search_query={q}"),
+            "stackoverflow" => ("Stack Overflow", $"https://stackoverflow.com/search?q={q}"),
+            "maps" or "google maps" => ("Google Maps", $"https://www.google.com/maps/search/{q}"),
+            _ => null
+        };
+        if (known is { } k) return (k.Url, $"Searching {k.Name} for “{query}”");
+        // A site GhostyNav doesn't know: its name goes in as an ordinary word.
+        if (name.Length > 0) query = $"{query} {name}";
+        return ($"https://www.google.com/search?q={Uri.EscapeDataString(query)}", $"Searching for “{query}”");
+    }
+
+    /// <summary>The Amazon store the model named (amazon.in), else the one for the user's region.</summary>
+    private static string AmazonHost(string site)
+    {
+        string host = site.Replace("www.", "");
+        if (Regex.IsMatch(host, @"^amazon\.(com|in|co\.uk|de|fr|it|es|ca|co\.jp|com\.au|com\.br|com\.mx|nl|se|pl|ae|sa|sg|com\.tr)$"))
+            return host;
+        return RegionInfo.CurrentRegion.TwoLetterISORegionName switch
+        {
+            "IN" => "amazon.in",
+            "GB" => "amazon.co.uk",
+            "DE" or "AT" => "amazon.de",
+            "FR" => "amazon.fr",
+            "IT" => "amazon.it",
+            "ES" => "amazon.es",
+            "CA" => "amazon.ca",
+            "JP" => "amazon.co.jp",
+            "AU" => "amazon.com.au",
+            _ => "amazon.com"
+        };
+    }
 
     /// <summary>Opens a web address in the default browser.</summary>
     private static bool Open(string url)

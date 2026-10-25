@@ -69,7 +69,11 @@ public static class GeminiAgent
         Act with the tools whenever the request is an action:
         - open_app: open an installed application. Use the closest name from the installed apps list.
         - search_youtube: anything to find, watch or play on YouTube.
-        - search_web: anything else to look up or search for in the browser.
+        - search_web: anything else to look up or search for in the browser. When the user names a site
+          to search or shop on ("search Amazon for...", "find it on Flipkart"), put that site in site.
+          Write query the way a person types into a search box: plain words, never quotation marks,
+          site: or other search operators. For a product or page they circled, use its short name
+          (brand and product), not its full title.
         - open_website: a specific site or URL ("open github").
         - create_routine: anything to do later or regularly: reminders ("remind me to stretch at 3",
           "every 30 minutes remind me to drink water") or scheduled actions ("open Spotify every
@@ -96,8 +100,12 @@ public static class GeminiAgent
                 ("name", "The application's name, as close as possible to one in the installed apps list.")),
             Function("search_youtube", "Search YouTube in the default browser.",
                 ("query", "What to search for on YouTube.")),
-            Function("search_web", "Search the web in the default browser.",
-                ("query", "The search query.")),
+            Tool("search_web", "Search the web, or one site's own search, in the default browser.",
+                [
+                    ("query", Text("Plain search words, without quotation marks or operators like site:.")),
+                    ("site", Text("Only when the user names a site to search on: its name or domain, e.g. 'amazon' or 'flipkart.com'. " +
+                        "Give the country's domain when what they circled shows it (an amazon.in page, prices in ₹: 'amazon.in')."))
+                ], "query"),
             Function("open_website", "Open a website in the default browser.",
                 ("url", "Full URL, including https://.")),
             CreateRoutine,
